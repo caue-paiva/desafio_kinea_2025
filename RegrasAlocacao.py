@@ -152,8 +152,6 @@ def construir_dict_ratings(lista_ratings:list[str],list_niveis:list[int])->dict:
 def get_ratings_igual_abaixo(rating:str)->list[str]:
     df_ratings = spark.sql("""SELECT * FROM desafio_kinea.boletagem_cp.tabelacar_baixorisco """
                            ).sort("Nivel").collect()
-    #df_ratings.show()  # Shows the content of the DataFrame
-    #print(df_ratings.count())  # Prints the number of rows in the DataFrame
     lista_ratings = []
     lista_nivels = []
     for row in df_ratings:
@@ -183,3 +181,259 @@ get_ratings_igual_abaixo("Aaa")
 
 # MAGIC %sql
 # MAGIC SELECT * FROM desafio_kinea.boletagem_cp.tabelacar_baixorisco
+
+# COMMAND ----------
+
+# Célula para pegar  dados de PL de crédito privado num fundo
+
+df_pl_credito_privado = spark.sql("""
+    WITH 
+tab_booksoverview AS (
+
+ SELECT
+ distinct
+   PositionDate
+   ,Book          --Book: Classificacao organizacional dos ativos dos fundos
+   ,Product       --Product: Produto, é o prório ativo
+   ,ProductClass  --ProductClass: Tipo de Produto (Debenture,Fidc, Cri/Cra, etc)
+   ,TradingDesk   --Fundo
+   ,Position      --Posicao em valor financeiro total do ativo
+
+ FROM
+ desafio_kinea.boletagem_cp.booksoverviewposicao_fechamento  --Tabela com as posicoes dos fundos
+
+
+ where (  LOWER(ProductClass) like '%debenture%'  --Apenas Ativos de Crédito Privado
+     or LOWER(ProductClass) like '%bonds%' 
+     or LOWER(ProductClass) like '%cra%' 
+     or LOWER(ProductClass) like '%cri%' 
+     or LOWER(ProductClass) like '%funds%' 
+     or LOWER(ProductClass) like '%letra%' 
+     or LOWER(ProductClass) like '%nota%'
+     )
+
+  and (  LOWER(Book) like '%ivan%') --Filtra Books Ivan (gestor do fundo) - Apenas Crédito Privado
+
+and TradingDesk in ('KCP','RFA','KOP', '846', '134', '678','FRA', 'CPI','PAL','ID2','PID','APO','APP','IRF','KAT','PEM','PDA',"KRF","652","389","348","BVP") --Apenas fundos finais
+
+)
+
+, tab_pl as (
+
+ SELECT
+   distinct
+   Data as PositionDate
+   ,Codigo as TradingDesk
+   ,PL
+  from desafio_kinea.boletagem_cp.cotas cotas --Tabela com o PL dos fundos
+)
+
+,tab_fundos as (
+ SELECT
+ DISTINCT
+ tab_booksoverview.*
+ ,tab_pl.PL
+ FROM
+ tab_booksoverview
+ LEFT JOIN
+ tab_pl
+ ON tab_pl.PositionDate = tab_booksoverview.PositionDate and tab_pl.TradingDesk = tab_booksoverview.TradingDesk
+ 
+) 
+
+select PositionDate,Book,TradingDesk AS Fundo,Position from tab_fundos
+""")
+#print(df_pl_credito_privado.count())
+df_pl_credito_privado.groupBy("Fundo")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC     WITH 
+# MAGIC tab_booksoverview AS (
+# MAGIC
+# MAGIC  SELECT
+# MAGIC  distinct
+# MAGIC    PositionDate
+# MAGIC    ,Book          --Book: Classificacao organizacional dos ativos dos fundos
+# MAGIC    ,Product       --Product: Produto, é o prório ativo
+# MAGIC    ,ProductClass  --ProductClass: Tipo de Produto (Debenture,Fidc, Cri/Cra, etc)
+# MAGIC    ,TradingDesk   --Fundo
+# MAGIC    ,Position      --Posicao em valor financeiro total do ativo
+# MAGIC
+# MAGIC  FROM
+# MAGIC  desafio_kinea.boletagem_cp.booksoverviewposicao_fechamento  --Tabela com as posicoes dos fundos
+# MAGIC
+# MAGIC
+# MAGIC  where (  LOWER(ProductClass) like '%debenture%'  --Apenas Ativos de Crédito Privado
+# MAGIC      or LOWER(ProductClass) like '%bonds%' 
+# MAGIC      or LOWER(ProductClass) like '%cra%' 
+# MAGIC      or LOWER(ProductClass) like '%cri%' 
+# MAGIC      or LOWER(ProductClass) like '%funds%' 
+# MAGIC      or LOWER(ProductClass) like '%letra%' 
+# MAGIC      or LOWER(ProductClass) like '%nota%'
+# MAGIC      )
+# MAGIC
+# MAGIC   and (  LOWER(Book) like '%ivan%') --Filtra Books Ivan (gestor do fundo) - Apenas Crédito Privado
+# MAGIC
+# MAGIC and TradingDesk in ('KCP','RFA','KOP', '846', '134', '678','FRA', 'CPI','PAL','ID2','PID','APO','APP','IRF','KAT','PEM','PDA',"KRF","652","389","348","BVP") --Apenas fundos finais
+# MAGIC
+# MAGIC )
+# MAGIC
+# MAGIC , tab_pl as (
+# MAGIC
+# MAGIC  SELECT
+# MAGIC    distinct
+# MAGIC    Data as PositionDate
+# MAGIC    ,Codigo as TradingDesk
+# MAGIC    ,PL
+# MAGIC   from desafio_kinea.boletagem_cp.cotas cotas --Tabela com o PL dos fundos
+# MAGIC )
+# MAGIC
+# MAGIC ,tab_fundos as (
+# MAGIC  SELECT
+# MAGIC  DISTINCT
+# MAGIC  tab_booksoverview.*
+# MAGIC  ,tab_pl.PL
+# MAGIC  FROM
+# MAGIC  tab_booksoverview
+# MAGIC  LEFT JOIN
+# MAGIC  tab_pl
+# MAGIC  ON tab_pl.PositionDate = tab_booksoverview.PositionDate and tab_pl.TradingDesk = tab_booksoverview.TradingDesk
+# MAGIC  
+# MAGIC ) 
+# MAGIC
+# MAGIC SELECT * FROM tab_fundos
+# MAGIC
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC     WITH 
+# MAGIC tab_booksoverview AS (
+# MAGIC
+# MAGIC  SELECT
+# MAGIC  distinct
+# MAGIC    PositionDate
+# MAGIC    ,Book          --Book: Classificacao organizacional dos ativos dos fundos
+# MAGIC    ,Product       --Product: Produto, é o prório ativo
+# MAGIC    ,ProductClass  --ProductClass: Tipo de Produto (Debenture,Fidc, Cri/Cra, etc)
+# MAGIC    ,TradingDesk   --Fundo
+# MAGIC    ,Position      --Posicao em valor financeiro total do ativo
+# MAGIC
+# MAGIC  FROM
+# MAGIC  desafio_kinea.boletagem_cp.booksoverviewposicao_fechamento  --Tabela com as posicoes dos fundos
+# MAGIC
+# MAGIC
+# MAGIC  where (  LOWER(ProductClass) like '%debenture%'  --Apenas Ativos de Crédito Privado
+# MAGIC      or LOWER(ProductClass) like '%bonds%' 
+# MAGIC      or LOWER(ProductClass) like '%cra%' 
+# MAGIC      or LOWER(ProductClass) like '%cri%' 
+# MAGIC      or LOWER(ProductClass) like '%funds%' 
+# MAGIC      or LOWER(ProductClass) like '%letra%' 
+# MAGIC      or LOWER(ProductClass) like '%nota%'
+# MAGIC      )
+# MAGIC
+# MAGIC   and (  LOWER(Book) like '%ivan%') --Filtra Books Ivan (gestor do fundo) - Apenas Crédito Privado
+# MAGIC
+# MAGIC and TradingDesk in ('KCP','RFA','KOP', '846', '134', '678','FRA', 'CPI','PAL','ID2','PID','APO','APP','IRF','KAT','PEM','PDA',"KRF","652","389","348","BVP") --Apenas fundos finais
+# MAGIC
+# MAGIC )
+# MAGIC
+# MAGIC , tab_pl as (
+# MAGIC
+# MAGIC  SELECT
+# MAGIC    distinct
+# MAGIC    Data as PositionDate
+# MAGIC    ,Codigo as TradingDesk
+# MAGIC    ,PL
+# MAGIC   from desafio_kinea.boletagem_cp.cotas cotas --Tabela com o PL dos fundos
+# MAGIC )
+# MAGIC
+# MAGIC ,tab_fundos as (
+# MAGIC  SELECT
+# MAGIC  DISTINCT
+# MAGIC  tab_booksoverview.*
+# MAGIC  ,tab_pl.PL
+# MAGIC  FROM
+# MAGIC  tab_booksoverview
+# MAGIC  LEFT JOIN
+# MAGIC  tab_pl
+# MAGIC  ON tab_pl.PositionDate = tab_booksoverview.PositionDate and tab_pl.TradingDesk = tab_booksoverview.TradingDesk
+# MAGIC  
+# MAGIC ) 
+# MAGIC
+# MAGIC SELECT t1.TradingDesk, SUM(Position) as PlCreditoPrivado FROM tab_fundos as t1 --soma e acha o total de crédito privado de cada fundo
+# MAGIC JOIN --join na tabela de data mais recente, filtrando a tabela para as combinações de cada fundo - ativo mais recentes
+# MAGIC (
+# MAGIC -- acha a data mais recente para cada combinação fundo e ativo
+# MAGIC SELECT TradingDesk, Product, MAX(PositionDate) AS MaxData from tab_fundos
+# MAGIC GROUP BY TradingDesk, Product
+# MAGIC ) t2
+# MAGIC ON t1.TradingDesk = t2.TradingDesk AND t1.Product = t2.Product AND t1.PositionDate = t2.MaxData
+# MAGIC GROUP BY t1.TradingDesk --groupby pelo fundo/trading desk
+
+# COMMAND ----------
+
+"""
+Classes de retorno do verificador de operação
+"""
+
+class __Resultado:
+    """
+    Classe que representa o resultado de uma análise de alocação de crédito privado, com uma flag bool ditando se esse resultado teve sucesso ou não
+    e uma tupla que representa o range de alocação possível
+    """
+    aprovada:bool
+    range_possivel:tuple[float,float]
+
+    def __init__(self,aprovada:bool,feedback:str,range_possivel:tuple[float,float]):
+        self.aprovada = aprovada
+        self.range_possivel = range_possivel
+
+
+class ResultadoRange(__Resultado):
+    """
+    Diz o status da alocacao no teste de range de alocação de crédito privado, como ditado pela tabela range_alocacao:
+
+    Retorno: Flag bool e range possível númerico que se encaixa nas regras de range do fundo
+    """
+
+class ResultadoRestricaoBook(__Resultado):
+    """
+    Diz o status da alocacao no teste de se o book_micro do fundo está como válido (valor da flag true) na tabela restricao_book
+
+    Retorno: Flag bool
+    """
+
+class ResultadoRating(__Resultado):
+    """
+    Diz o resultado da alocação do ativo no teste de rating, como ditado pelas tabelas tabelacar_
+
+    Retorno: Flag bool
+    """
+
+class ResultadoMaxEmissor(__Resultado):
+    """
+    Diz o resultado da alocação do ativo no teste de max_emissor, como ditado pelas tabelas tabelacar_
+
+    Retorno: Flag bool e range possível que se encaixa no MaxEmissor
+    """
+
+@dataclass
+class ResultadoAlocacao:
+    """
+    Resultado final da análise da alocação, com flag booleana de se foi aceita ou não e também feedback e ranges possíveis para cada verificação caso não seja aprovadas
+    """
+
+    aprovada: bool
+    resultado_range: ResultadoRange
+    resultado_restricao_book: ResultadoRestricaoBook
+    resultado_rating: ResultadoRating
+    resultado_max_emissor: ResultadoMaxEmissor
+
+
+# COMMAND ----------
+
+
