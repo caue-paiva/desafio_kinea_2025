@@ -436,4 +436,45 @@ class ResultadoAlocacao:
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC
+# MAGIC -- Query para etapa final, de relacionar ativos com seus fundos, dando join pelo book do ativo
+# MAGIC -- com o book_micro das restrições de cada book para verificar se o ativo pode ser alocado ou não
+# MAGIC -- dentro daquele book para determinado fundo (apontado pela flag "flag").
+# MAGIC
+# MAGIC -- Há também relacionado qual o peso de cada classe de ativo que será alocado para cada fundo, além
+# MAGIC -- do range de alocação mínima e máxima para cada fundo.
+# MAGIC
+# MAGIC -- Será utilizado no processamento final para realizar a redistribuição entre os fundos de acordo com
+# MAGIC -- a régua que é calculada anteriormente no processo.
+# MAGIC
+# MAGIC SELECT 
+# MAGIC   book_ativos.ativo,
+# MAGIC   restricao_book.fundo,
+# MAGIC   book_ativos.fundo_restrito,
+# MAGIC   restricao_book.book_macro, 
+# MAGIC   restricao_book.book_micro,
+# MAGIC   restricao_book.flag,
+# MAGIC   pesos_classes.peso,
+# MAGIC   range_alocacao.alocacao_maxima,
+# MAGIC   range_alocacao.alocacao_minima
+# MAGIC FROM desafio_kinea.boletagem_cp.book_ativos as book_ativos
+# MAGIC JOIN desafio_kinea.boletagem_cp.restricao_book as restricao_book 
+# MAGIC ON book_ativos.book = restricao_book.book_micro
+# MAGIC JOIN desafio_kinea.boletagem_cp.pesos_classes as pesos_classes
+# MAGIC ON restricao_book.book_macro = pesos_classes.classe
+# MAGIC JOIN desafio_kinea.boletagem_cp.range_alocacao as range_alocacao
+# MAGIC ON pesos_classes.Fundo = range_alocacao.Fundo AND restricao_book.fundo = range_alocacao.Fundo;
 
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC -- Testando relações entre as tabelas para verificar se há perda de informação sobre os ativos no processo
+# MAGIC
+# MAGIC -- select * from desafio_kinea.boletagem_cp.restricao_book;
+# MAGIC
+# MAGIC -- select * from desafio_kinea.boletagem_cp.book_ativos;
+# MAGIC
+# MAGIC select DISTINCT book, restricao_book.book_micro from desafio_kinea.boletagem_cp.restricao_book
+# MAGIC   join desafio_kinea.boletagem_cp.book_ativos on book_ativos.book = restricao_book.book_micro;
