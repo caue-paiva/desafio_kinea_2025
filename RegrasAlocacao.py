@@ -438,6 +438,70 @@ class ResultadoAlocacao:
 
 # MAGIC %sql
 # MAGIC
+# MAGIC WITH 
+# MAGIC tab_booksoverview AS (
+# MAGIC  SELECT
+# MAGIC    DISTINCT
+# MAGIC    PositionDate,
+# MAGIC    Book,          -- Classificação organizacional dos ativos dos fundos
+# MAGIC    Product,       -- Produto: ativo específico
+# MAGIC    ProductClass,  -- Tipo de Produto (Debenture, Fidc, Cri/Cra, etc.)
+# MAGIC    TradingDesk,   -- Fundo
+# MAGIC    Position       -- Posição em valor financeiro total do ativo
+# MAGIC  FROM
+# MAGIC    desafio_kinea.boletagem_cp.booksoverviewposicao_fechamento  -- Tabela ajustada para posições dos fundos
+# MAGIC  WHERE 
+# MAGIC    (
+# MAGIC      LOWER(ProductClass) LIKE '%debenture%'  -- Apenas Ativos de Crédito Privado
+# MAGIC      OR LOWER(ProductClass) LIKE '%bonds%'
+# MAGIC      OR LOWER(ProductClass) LIKE '%cra%'
+# MAGIC      OR LOWER(ProductClass) LIKE '%cri%'
+# MAGIC      OR LOWER(ProductClass) LIKE '%funds%'
+# MAGIC      OR LOWER(ProductClass) LIKE '%letra%'
+# MAGIC      OR LOWER(ProductClass) LIKE '%nota%'
+# MAGIC    )
+# MAGIC    AND (LOWER(Book) LIKE '%ivan%') -- Filtra Books Ivan (gestor do fundo) - Apenas Crédito Privado
+# MAGIC    AND TradingDesk IN (
+# MAGIC      'KCP', 'RFA', 'KOP', '846', '134', '678', 'FRA', 'CPI', 'PAL', 'ID2', 'PID', 
+# MAGIC      'APO', 'APP', 'IRF', 'KAT', 'PEM', 'PDA', 'KRF', '652', '389', '348', 'BVP'
+# MAGIC    ) -- Apenas fundos finais
+# MAGIC ),
+# MAGIC
+# MAGIC tab_pl AS (
+# MAGIC  SELECT
+# MAGIC    DISTINCT
+# MAGIC    Data AS PositionDate,
+# MAGIC    Codigo AS TradingDesk,
+# MAGIC    PL
+# MAGIC  FROM
+# MAGIC    desafio_kinea.boletagem_cp.cotas -- Tabela ajustada com o PL dos fundos
+# MAGIC ),
+# MAGIC
+# MAGIC tab_fundos AS (
+# MAGIC  SELECT
+# MAGIC    DISTINCT
+# MAGIC    tab_booksoverview.*,
+# MAGIC    tab_pl.PL
+# MAGIC  FROM
+# MAGIC    tab_booksoverview
+# MAGIC  LEFT JOIN
+# MAGIC    tab_pl
+# MAGIC  ON 
+# MAGIC    tab_pl.PositionDate = tab_booksoverview.PositionDate 
+# MAGIC    AND tab_pl.TradingDesk = tab_booksoverview.TradingDesk
+# MAGIC ),
+# MAGIC
+# MAGIC PL_por_fundo (SELECT t1.TradingDesk, SUM(Position) as PlCreditoPrivado FROM tab_fundos as t1 --soma e acha o total de crédito privado de cada fundo
+# MAGIC JOIN --join na tabela de data mais recente, filtrando a tabela para as combinações de cada fundo - ativo mais recentes
+# MAGIC (
+# MAGIC -- acha a data mais recente para cada combinação fundo e ativo
+# MAGIC SELECT TradingDesk, Product, MAX(PositionDate) AS MaxData from tab_fundos
+# MAGIC GROUP BY TradingDesk, Product
+# MAGIC ) t2
+# MAGIC ON t1.TradingDesk = t2.TradingDesk AND t1.Product = t2.Product AND t1.PositionDate = t2.MaxData
+# MAGIC GROUP BY t1.TradingDesk --groupby pelo fundo/trading desk
+# MAGIC )
+# MAGIC
 # MAGIC -- Query para etapa final, de relacionar ativos com seus fundos, dando join pelo book do ativo
 # MAGIC -- com o book_micro das restrições de cada book para verificar se o ativo pode ser alocado ou não
 # MAGIC -- dentro daquele book para determinado fundo (apontado pela flag "flag").
@@ -457,14 +521,32 @@ class ResultadoAlocacao:
 # MAGIC   restricao_book.flag,
 # MAGIC   pesos_classes.peso,
 # MAGIC   range_alocacao.alocacao_maxima,
-# MAGIC   range_alocacao.alocacao_minima
+# MAGIC   range_alocacao.alocacao_minima,
+# MAGIC   PL_por_fundo.PlCreditoPrivado
 # MAGIC FROM desafio_kinea.boletagem_cp.book_ativos as book_ativos
 # MAGIC JOIN desafio_kinea.boletagem_cp.restricao_book as restricao_book 
 # MAGIC ON book_ativos.book = restricao_book.book_micro
 # MAGIC JOIN desafio_kinea.boletagem_cp.pesos_classes as pesos_classes
 # MAGIC ON restricao_book.book_macro = pesos_classes.classe
 # MAGIC JOIN desafio_kinea.boletagem_cp.range_alocacao as range_alocacao
-# MAGIC ON pesos_classes.Fundo = range_alocacao.Fundo AND restricao_book.fundo = range_alocacao.Fundo;
+# MAGIC ON pesos_classes.Fundo = range_alocacao.Fundo AND restricao_book.fundo = range_alocacao.Fundo
+# MAGIC JOIN PL_por_fundo
+# MAGIC ON PL_por_fundo.TradingDesk = restricao_book.fundo;
+# MAGIC
+# MAGIC -- SELECT * FROM (
+# MAGIC --     SELECT DISTINCT Fundo FROM desafio_kinea.boletagem_cp.range_alocacao
+# MAGIC --     EXCEPT
+# MAGIC --     SELECT DISTINCT TradingDesk FROM PL_por_fundo
+# MAGIC     
+# MAGIC -- );
+# MAGIC
+# MAGIC -- SELECT * FROM (
+# MAGIC --     SELECT DISTINCT TradingDesk FROM PL_por_fundo
+# MAGIC --     EXCEPT
+# MAGIC --     SELECT DISTINCT Fundo FROM desafio_kinea.boletagem_cp.range_alocacao
+# MAGIC     
+# MAGIC -- );
+# MAGIC
 
 # COMMAND ----------
 
@@ -476,5 +558,7 @@ class ResultadoAlocacao:
 # MAGIC
 # MAGIC -- select * from desafio_kinea.boletagem_cp.book_ativos;
 # MAGIC
-# MAGIC select DISTINCT book, restricao_book.book_micro from desafio_kinea.boletagem_cp.restricao_book
-# MAGIC   join desafio_kinea.boletagem_cp.book_ativos on book_ativos.book = restricao_book.book_micro;
+# MAGIC select Fundo from desafio_kinea.boletagem_cp.range_alocacao;
+# MAGIC
+# MAGIC -- select DISTINCT book, restricao_book.book_micro from desafio_kinea.boletagem_cp.restricao_book
+# MAGIC --   join desafio_kinea.boletagem_cp.book_ativos on book_ativos.book = restricao_book.book_micro;
