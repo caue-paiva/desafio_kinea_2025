@@ -103,7 +103,7 @@ Retorna o book que um ativo pertence
 df_books = spark.sql("""
                      SELECT * FROM desafio_kinea.boletagem_cp.book_ativos
                      """)
-df_books.show()
+#df_books.show()
 
 def get_books_do_ativo(ativo:str,df_books:DataFrame)->list[str]:
    """
@@ -386,7 +386,7 @@ class __Resultado:
     e uma tupla que representa o range de alocação possível
     """
     aprovada:bool
-    range_possivel:tuple[float,float]
+    range_possivel:tuple[float,float] | None
 
     def __init__(self,aprovada:bool,feedback:str,range_possivel:tuple[float,float]):
         self.aprovada = aprovada
@@ -404,21 +404,21 @@ class ResultadoRestricaoBook(__Resultado):
     """
     Diz o status da alocacao no teste de se o book_micro do fundo está como válido (valor da flag true) na tabela restricao_book
 
-    Retorno: Flag bool
+    Retorno: Flag bool, None
     """
 
 class ResultadoRating(__Resultado):
     """
     Diz o resultado da alocação do ativo no teste de rating, como ditado pelas tabelas tabelacar_
 
-    Retorno: Flag bool
+    Retorno: Flag bool, None
     """
 
 class ResultadoMaxEmissor(__Resultado):
     """
     Diz o resultado da alocação do ativo no teste de max_emissor, como ditado pelas tabelas tabelacar_
 
-    Retorno: Flag bool e range possível que se encaixa no MaxEmissor
+    Retorno: Flag bool e um teto que se encaixa no MaxEmissor
     """
 
 @dataclass
