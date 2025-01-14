@@ -512,6 +512,8 @@ class ResultadoAlocacao:
 # MAGIC -- Será utilizado no processamento final para realizar a redistribuição entre os fundos de acordo com
 # MAGIC -- a régua que é calculada anteriormente no processo.
 # MAGIC
+# MAGIC -- Essa tabela está relacionada com as restrições das classes ResultadoRange e ResultadoRestricaoBook
+# MAGIC
 # MAGIC SELECT 
 # MAGIC   book_ativos.ativo,
 # MAGIC   restricao_book.fundo,
