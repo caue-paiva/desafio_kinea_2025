@@ -20,8 +20,10 @@
 #### Implementação:
 * Terminar Função principal
 1. Terminar função de extração de informações
-1. Implementar função de redistribuição
-2. Implementar funções para consumir funções geradas pelo Cauê e Cícero 
+2. Implementar função de redistribuição
+3. Implementar função para verificar quanto um fundo está aportado em um book
+4. Implementar função para calcular quanto deve ser alocado para atingir o percentual da régua
+5. Implementar funções para consumir funções geradas pelo Cauê e Cícero 
 	1. Fazer funções imaginarias de exemplo como se fossem a do caue e cicero
-3. Implementar Discretização e retornar Régua Final
+6. Implementar Discretização e retornar Régua Final
 
