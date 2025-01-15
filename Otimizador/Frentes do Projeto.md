@@ -26,4 +26,5 @@
 5. Implementar funções para consumir funções geradas pelo Cauê e Cícero 
 	1. Fazer funções imaginarias de exemplo como se fossem a do caue e cicero
 6. Implementar Discretização e retornar Régua Final
-
+#### Testes:
+1. Após terminar extração de informações precisamos fazer testes simples, com as fórmulas criadas
