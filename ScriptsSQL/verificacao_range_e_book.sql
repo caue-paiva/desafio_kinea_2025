@@ -1,5 +1,3 @@
-%sql
-
 WITH 
 tab_booksoverview AS (
  SELECT
