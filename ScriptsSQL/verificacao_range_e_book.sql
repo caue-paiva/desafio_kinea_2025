@@ -81,11 +81,11 @@ SELECT
   restricao_book.book_macro, 
   restricao_book.book_micro,
   restricao_book.flag,
-  pesos_classes.peso,
+  pesos_classes.peso as peso_book,
   range_alocacao.alocacao_maxima as alocacao_max_porcen,
   range_alocacao.alocacao_minima as alocacao_min_porcen,
-  range_alocacao.alocacao_maxima * tabela_pl.PL,
-  range_alocacao.alocacao_minima * tabela_pl.PL,
+  range_alocacao.alocacao_maxima * tabela_pl.PL as alocacao_max,
+  range_alocacao.alocacao_minima * tabela_pl.PL as alocacao_min,
   PL_por_fundo.PlCreditoPrivado,
   tabela_pl.PL 
 FROM desafio_kinea.boletagem_cp.book_ativos as book_ativos
