@@ -174,7 +174,7 @@ def get_ratings_igual_abaixo(rating:str)->list[str]:
         filter(lambda x: x[0] >= best_level,ratings_dict.items()) #essa equação ou inequação é a principal coisa a se mudar caso precise modificar a lógica
     )
 
-get_ratings_igual_abaixo("Aaa")
+get_ratings_igual_abaixo("Baa1")
 #rating_igual_ou_menor("A1","A1 a A4")
 
 # COMMAND ----------
