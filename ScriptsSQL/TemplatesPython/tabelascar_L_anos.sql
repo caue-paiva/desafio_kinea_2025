@@ -1,6 +1,3 @@
-/*
-O objetivo dessa query é ditar qual a porcentagem do PL de certo fundo é composto por ativos de crédito privado de até certo rating, de acordo com a lógica das tabelas CAR
-*/
 
 WITH pl_total_fundo AS (
   SELECT t1.Codigo, t1.Data, t1.PL
@@ -60,10 +57,10 @@ tab_fundos AS (
 
 
 
-SELECT tabela_emissor.TradingDesk, PL as pl_total , pl_credito_privado FROM pl_total_fundo
-JOIN
+SELECT Emissor, RatingGrupo, TradingDesk, pl_emissor, PL FROM pl_total_fundo --query dando join da tabela de Pl total com a tabela de PL agrupado por emissores e filtrado pelos anos até cada titulo expirar
+JOIN 
 (
-    SELECT  t1.TradingDesk, SUM(Position) as pl_credito_privado FROM tab_fundos as t1 --soma e acha o total de crédito privado de cada fundo
+    SELECT  Emissor,RatingGrupo, t2.TradingDesk, SUM(Position) as pl_emissor FROM tab_fundos as t1 --soma e acha o total de crédito privado de cada fundo
     JOIN --join na tabela de data mais recente, filtrando a tabela para as combinações de cada fundo - ativo mais recentes
     (
       -- acha a data mais recente para cada combinação fundo e ativo
@@ -71,7 +68,7 @@ JOIN
       GROUP BY TradingDesk, Product
     ) t2
     ON t1.TradingDesk = t2.TradingDesk AND t1.Product = t2.Product AND t1.PositionDate = t2.MaxData
-    JOIN --subquery para o rating dos atiivos
+    JOIN --subquery para o rating dos atiivos, dos emissores e datas de expiração
     (
       SELECT DISTINCT 
         Emissor, 
@@ -85,7 +82,7 @@ JOIN
       JOIN desafio_kinea.boletagem_cp.ratinggrupoatual ON NomeGrupo = Emissor 
     )
     ON  t1.Product = Ativo
-    WHERE RatingOp IN ('Baa3','Baa4') --filtra pelo rating
-    GROUP BY t1.TradingDesk
+    WHERE ExpiracaoAnos >= {} --filtra pelos anos até expiração
+    GROUP BY Emissor,RatingGrupo, t2.TradingDesk
 ) AS tabela_emissor
-ON pl_total_fundo.Codigo = tabela_emissor.TradingDesk
+ON pl_total_fundo.Codigo = tabela_emissor.TradingDesk --join pela coluna de fundos entre a tabela de PL total e a tabela de PL filtrada por emissor

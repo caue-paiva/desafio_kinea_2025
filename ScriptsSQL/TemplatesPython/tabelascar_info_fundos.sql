@@ -60,32 +60,28 @@ tab_fundos AS (
 
 
 
-SELECT tabela_emissor.TradingDesk, PL as pl_total , pl_credito_privado FROM pl_total_fundo
-JOIN
+
+SELECT  t1.TradingDesk, SUM(Position) FROM tab_fundos as t1 --soma e acha o total de crédito privado de cada fundo
+JOIN --join na tabela de data mais recente, filtrando a tabela para as combinações de cada fundo - ativo mais recentes
 (
-    SELECT  t1.TradingDesk, SUM(Position) as pl_credito_privado FROM tab_fundos as t1 --soma e acha o total de crédito privado de cada fundo
-    JOIN --join na tabela de data mais recente, filtrando a tabela para as combinações de cada fundo - ativo mais recentes
-    (
-      -- acha a data mais recente para cada combinação fundo e ativo
-      SELECT TradingDesk, Product, MAX(PositionDate) AS MaxData from tab_fundos
-      GROUP BY TradingDesk, Product
-    ) t2
-    ON t1.TradingDesk = t2.TradingDesk AND t1.Product = t2.Product AND t1.PositionDate = t2.MaxData
-    JOIN --subquery para o rating dos atiivos
-    (
-      SELECT DISTINCT 
-        Emissor, 
-        Ativo, 
-        FLOOR(DATEDIFF(Vencimento,CURRENT_DATE) / 365) AS ExpiracaoAnos,
-        RatingOp,
-        RatingGrupo 
-      FROM desafio_kinea.boletagem_cp.agendacp
-      JOIN desafio_kinea.boletagem_cp.cadastroativo ON TickerOp = Ativo --join para ter a coluna de Vencimento
-      JOIN desafio_kinea.boletagem_cp.ratingopatual ON ratingopatual.TickerOp = Ativo--join para ter coluna de rating
-      JOIN desafio_kinea.boletagem_cp.ratinggrupoatual ON NomeGrupo = Emissor 
-    )
-    ON  t1.Product = Ativo
-    WHERE RatingOp IN ('Baa3','Baa4') --filtra pelo rating
-    GROUP BY t1.TradingDesk
-) AS tabela_emissor
-ON pl_total_fundo.Codigo = tabela_emissor.TradingDesk
+  -- acha a data mais recente para cada combinação fundo e ativo
+  SELECT TradingDesk, Product, MAX(PositionDate) AS MaxData from tab_fundos
+  GROUP BY TradingDesk, Product
+) t2
+ON t1.TradingDesk = t2.TradingDesk AND t1.Product = t2.Product AND t1.PositionDate = t2.MaxData
+JOIN --subquery para o rating dos atiivos
+(
+  SELECT DISTINCT 
+    Emissor, 
+    Ativo, 
+    FLOOR(DATEDIFF(Vencimento,CURRENT_DATE) / 365) AS ExpiracaoAnos,
+    RatingOp,
+    RatingGrupo 
+  FROM desafio_kinea.boletagem_cp.agendacp
+  JOIN desafio_kinea.boletagem_cp.cadastroativo ON TickerOp = Ativo --join para ter a coluna de Vencimento
+  JOIN desafio_kinea.boletagem_cp.ratingopatual ON ratingopatual.TickerOp = Ativo--join para ter coluna de rating
+  JOIN desafio_kinea.boletagem_cp.ratinggrupoatual ON NomeGrupo = Emissor 
+)
+ON  t1.Product = Ativo
+WHERE RatingOp IN ('Baa3','Baa4') --filtra pelo rating
+GROUP BY t1.TradingDesk

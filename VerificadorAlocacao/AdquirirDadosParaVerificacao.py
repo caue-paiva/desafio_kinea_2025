@@ -87,3 +87,72 @@ class DadosAlocacao:
     def get_book_ativo(self,ativo:str)->list[str]:
         if not self.__dados_estao_atualizados(): #dados desatualizados
            self.__atualizar_dados() #atualiza dados 
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM desafio_kinea.boletagem_cp.tabelacar_baixorisco
+
+# COMMAND ----------
+
+df=_sqldf.toPandas()
+print(df.info())
+
+# COMMAND ----------
+
+import os
+from pathlib import Path
+
+class __Queries:
+
+
+    ARQUIVOS_SQL = [
+      "tabelascar_L_anos.sql",
+      "tabelascar_pl_emissores.sql",
+      "tabelascar_info_fundos.sql",
+      "tabelascar_info_ativos.sql"
+    ]
+
+    dict_queries:dict[str,str] #mapea o nome de um arquivo/nome da query à string da propia query
+    path_folder_queries:  Path
+    query_tabelascar_pl_anos_ativos:str
+    query_tabelascar_pl_emissor:str
+
+    def __init__(self):
+        dir_atual = Path(os.getcwd())
+        path_final = dir_atual.absolute().parent / Path("ScriptsSQL") / Path("TemplatesPython")
+        self.path_folder_queries = path_final
+        self.read_query_files() #lé os arquivos das queries
+
+    def read_query_files(self)->None:
+        dict_queries = {}
+        for nome_arqui in self.ARQUIVOS_SQL:
+          with open(self.path_folder_queries / Path(nome_arqui), "r") as file:
+            dict_queries[nome_arqui] = file.read()
+        
+        self.dict_queries = dict_queries
+
+    def tabelascar_pl_anos_ativos(self,vencimento_maior_que:int)->DataFrame:
+        query:str = self.dict_queries["tabelascar_L_anos.sql"]
+        return spark.sql(query)
+      
+    def tabelascar_pl_emissor(self)->DataFrame:
+        query:str = self.dict_queries["tabelascar_pl_emissores.sql"]
+        return spark.sql(query)
+      
+    def tabelascar_info_fundos(self)->DataFrame:
+        query:str = self.dict_queries["tabelascar_info_fundos.sql"]
+        return spark.sql(query)
+
+    def tabelascar_info_ativos(self)->DataFrame:
+        query:str = self.dict_queries["tabelascar_info_ativos.sql"]
+        return spark.sql(query)  
+
+# COMMAND ----------
+
+
+que = __Queries()
+
+df = que.tabelascar_info_fundos()
+print(df.show())
+
