@@ -163,45 +163,108 @@ print(df.show())
 
 from dataclasses import dataclass
 import pandas as pd
-
-@dataclass
-class EstadoDado:
-    nome_csv:str
-    data_atualizacao: datetime
-
-
+import math
+from datetime import timedelta, datetime
 
 class DadosAlocacao:
     
-    # ()
     __QUERIES = _Queries()
     __ARQUIVOS_SQL: list[str] = __QUERIES.ARQUIVOS_SQL
     __ARQUIVOS_DATAS = "datas_atualizacao.csv"
+    __DATAS_PARA_ATUALIZAR:dict = {
+        "tabelascar_pl_emissores.sql": timedelta(weeks=1),
+        "tabelascar_L_anos.sql": timedelta(weeks=1),
+        "tabelascar_info_fundos.sql": timedelta(weeks=1),
+        "tabelascar_info_ativos.sql": timedelta(weeks=1)
+    }
+    __MAPA_TABELAS_METODOS:dict = {
+        "tabelascar_pl_emissores.sql": __QUERIES.tabelascar_pl_emissor,
+        "tabelascar_L_anos.sql":  __QUERIES.tabelascar_pl_anos_ativos,
+        "tabelascar_info_fundos.sql": __QUERIES.tabelascar_info_fundos,
+        "tabelascar_info_ativos.sql": __QUERIES.tabelascar_info_ativos
+    }
+    __METODOS_COM_ARGS = ["tabelascar_L_anos.sql","tabelascar_info_fundos.sql"]
 
-    datas_atualizacao:dict[str,datetime] #dado o nome de uma query/tabela diz qual foi a última vez que ela foi atualizada
+    datas_atualizacao:dict[str, datetime | None] #dado o nome de uma query/tabela diz qual foi a última vez que ela foi atualizada
     path_folder_dados:Path
 
     def __init__(self):
         dir_atual = Path(os.getcwd())
-        path_final = dir_atual / Path("DadosVerificacao")
-        for p in path_final.iterdir():
-            with open(p, "r") as file:
-                print(file.read())
-
+        path_final = dir_atual.absolute() / Path("DadosVerificacao")
         self.path_folder_dados = path_final
         self.__ler_arquivo_datas()
-    
-
+        self.__verifica_dados_atualizados()
+       
     def __ler_arquivo_datas(self)->None:
         if not Path(self.__ARQUIVOS_DATAS).exists():
             pass
         
+        path = self.path_folder_dados / Path(self.__ARQUIVOS_DATAS)     
+        try:
+            datas_df = pd.read_csv(path)
+        except Exception as e:
+            print("Falha ao ler arquivo de datas atualizacao, criando novo arquivo")
+            datas_df = pd.DataFrame(columns=["nome_tabela","data_atualizacao"])
+            for i in self.__ARQUIVOS_SQL:
+                new_row = pd.DataFrame({"nome_tabela": [i], "data_atualizacao": [None]})
+                datas_df = pd.concat([datas_df, new_row], ignore_index=True)
+            datas_df.to_csv(path,index=False)
+
+        datas_atualizacao = {}
+        for row in datas_df.itertuples():
+            print(row.data_atualizacao)
+            if isinstance(row.data_atualizacao, float): #nan/null
+                data  = None
+            else:
+                data = datetime.strptime(row.data_atualizacao, "%Y-%m-%d %H:%M:%S.%f")
+            datas_atualizacao[row.nome_tabela] = data
+        print(datas_df)
+        self.datas_atualizacao = datas_atualizacao
+
+    def __escreve_arquivo_datas(self)->None:
+        print("atualizando datas")
         path = self.path_folder_dados / Path(self.__ARQUIVOS_DATAS)
-        #print("path final: ",path)
-       # with open(path, "r") as file:
-        #    print(file.read())
-        #datas_df = pd.read_csv(path)
-        #print(datas_df)
+        datas_df = pd.DataFrame(columns=["nome_tabela","data_atualizacao"])
+        for i in self.__ARQUIVOS_SQL:
+            new_row = pd.DataFrame({"nome_tabela": [i], "data_atualizacao": [self.datas_atualizacao[i]]})
+            datas_df = pd.concat([datas_df, new_row], ignore_index=True)
+        datas_df.to_csv(path,index=False)
+
+    def __verifica_dados_atualizados(self)->None:
+        atualizou_tabela = False
+        for tabela,data_atualizacao in self.datas_atualizacao.items():
+            tempo_max_atualizar = self.__DATAS_PARA_ATUALIZAR[tabela]
+            if data_atualizacao is None: #atualiza dados
+                atualizou_tabela = True
+                self.__atualizar_dados(tabela) 
+                continue
+            
+            tempo_passado = datetime.now() - data_atualizacao
+            if tempo_passado > tempo_max_atualizar: #atualiza dados
+                atualizou_tabela = True
+                self.__atualizar_dados(tabela) 
+        
+        if atualizou_tabela:
+            self.__escreve_arquivo_datas()
+
+    def __atualizar_tabelas_arg(self,tabela:str):
+        if tabela == "tabelascar_L_anos.sql":
+            pass
+        elif tabela == "tabelascar_info_fundos.sql":
+            pass
+        else:
+            raise Exception("Tabela com argumento passada para essa função não teve sua lógica implementada")
+
+    def __atualizar_dados(self,tabela:str)->None:
+        if tabela in self.__METODOS_COM_ARGS:
+            pass #logica especial
+        else:        
+            df = self.__MAPA_TABELAS_METODOS[tabela]().toPandas()
+            path = str(self.path_folder_dados / Path(f"{tabela}.csv"))
+            df.to_csv(path,index=False)
+            #df.write.csv(path, mode="overwrite")
+            self.datas_atualizacao[tabela] = datetime.now()
+        
             
 
 
