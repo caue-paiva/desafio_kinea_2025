@@ -32,12 +32,12 @@ def extrair_informacoes() -> List[pd.DataFrame]:
     Inputs:
         None
     Output:
-        inf_fundos: DataFrame com Patrimônio Líquido, Range Mínimo e Máximo de Crédito para cada fundo ['fundo','PL','l_min','l_max','v_min','v_max']
-        peso_book_fundos: DataFrame com Percentual de Alocação de cada Book (Esse perccentual é referente a parte disponivel para crédito) para cada fundo ['fundo','book_macro','peso_book_macro']
-        credito_aportado: DataFrame com valor de crédito alocado em cada book em cada fundo ['fundo','book','produto',alocado']
-        restricoes_book_micro: DataFrame com as restrições book micro [book','fundo','flag']
-        restricoes_fundo_restrito: Dataframe com restrições fundo restrito ['ativo',fundo','flag']
-        ativos_books: DataFrame com ativos e seus books ['ativo','book_micro'] (Pode ser que não tenhamos todos cadastrados)
+        0. inf_fundos: DataFrame com Patrimônio Líquido, Range Mínimo e Máximo de Crédito para cada fundo ['fundo','PL','l_min','l_max','v_min','v_max']
+        1. peso_book_fundos: DataFrame com Percentual de Alocação de cada Book (Esse perccentual é referente a parte disponivel para crédito) para cada fundo ['fundo','book_macro','peso_book_macro']
+        2. credito_aportado: DataFrame com valor de crédito alocado em cada book em cada fundo ['fundo','book','produto',alocado']
+        3. restricoes_book_micro: DataFrame com as restrições book micro [book','fundo','flag']
+        4. restricoes_fundo_restrito: Dataframe com restrições fundo restrito ['ativo',fundo','flag']
+        5. ativos_books: DataFrame com ativos e seus books ['ativo','book_micro'] (Pode ser que não tenhamos todos cadastrados)
     '''
     #Tabela Base
     tabela_base = query("verificacao_range_e_book")
@@ -45,10 +45,10 @@ def extrair_informacoes() -> List[pd.DataFrame]:
 
 
     #Filtrando inf_fundos ['fundo','PL','l_min','l_max','v_min','v_max']
-    inf_fundos = tabela_base[['fundo','PL','alocacao_min_porcen','alocacao_max_porcen','(alocacao_minima * PL)','(alocacao_maxima * PL)']].drop_duplicates('fundo').rename(columns={'(alocacao_minima * PL)':'v_min','(alocacao_maxima * PL)':'v_max','alocacao_min_porcen':'l_min','alocacao_max_porcen':'l_max'})
+    inf_fundos = tabela_base[['fundo','PL','alocacao_min_porcen','alocacao_max_porcen','alocacao_min','alocacao_max']].drop_duplicates('fundo').rename(columns={'alocacao_min':'v_min','alocacao_max':'v_max','alocacao_min_porcen':'l_min','alocacao_max_porcen':'l_max'})
     
     #Filtrando peso_book_fundos ['fundo','book_macro','peso']
-    peso_book_fundos = tabela_base[['fundo','peso','book_macro']].drop_duplicates(['fundo','book_macro'])
+    peso_book_fundos = tabela_base[['fundo','peso_book','book_macro']].drop_duplicates(['fundo','book_macro']).rename(columns={'peso_book':'peso'})
 
     #Filtrando Crédito Aportado ['fundo','ativo',alocado']
     credito_aportado = tabela_base_aportado.rename(columns={'TradingDesk':'fundo','Product':'ativo','Position':'alocado'}).drop(columns=["PositionDate"])
@@ -160,11 +160,7 @@ def redistribuir(regua_macro:pd.DataFrame,restritos:pd.DataFrame) -> pd.DataFram
 # COMMAND ----------
 
 #Extraindo Informações Necessárias
-tempo_extrair_i = time.perf_counter()
 dataframes = extrair_informacoes()
-tempo_extrair_f = time.perf_counter()
-print(tempo_extrair_f - tempo_extrair_i)
-
 
 # COMMAND ----------
 
@@ -180,7 +176,6 @@ def solucao(checagens: List[Callable],ordens: pd.DataFrame,informacoes: List[pd.
     '''
     #Essas  etapas são para 1 ordem -> 1 linha do dataframe ordens
     
-    tempo_solucionar_i = time.perf_counter()
 
     #Extrair ativo da ordem
     ativo = 'INDIGO FIAGRO DCA EMISSAO 1 SERIE 1 SENIOR'
@@ -208,14 +203,8 @@ def solucao(checagens: List[Callable],ordens: pd.DataFrame,informacoes: List[pd.
     #Redistribuir 
     regua = redistribuir(regua_macro,alocacoes_restritos)
     regua = regua[regua['percentual_alocacao'] != 0].dropna()
-    
-    #Verificação pelas tabelascar
 
-    #Verificação pelo Nexxus
-
-    tempo_solucionar_f = time.perf_counter()
-    tempo_solucionar = tempo_solucionar_f - tempo_solucionar_i
-    print(tempo_solucionar)
+    #Retornar Regua
     return regua
    
 
@@ -224,18 +213,10 @@ print(teste)
 
 # COMMAND ----------
 
-teste['percentual_alocacao'].sum()
-
-# COMMAND ----------
-
-#Visualização pré alocação e pós alocação
-
-
-# COMMAND ----------
-
 # DBTITLE 1,Testes Cálculo Régua
 #Teste Cálculo Régua - Exemplo feito pelo Ali na Reunião do dia 09/01/2025 (https://drive.google.com/file/d/1O-bVrF1At0xZNQIGmIOQ1Oi7YiSkGD0u/view?usp=sharing)
-credito_total = 40
+#Apenas um teste não precisa rodas
+''''credito_total = 40
 teste_inf_fundos = pd.DataFrame({
         'fundo':['RFA','APO','ID2'],
         'PL':[100,50,70],
@@ -255,4 +236,4 @@ resposta_ali = pd.DataFrame({
         
 })
 print(resposta_nossa['percentual_alocacao'])
-print(resposta_ali['dist_regua'])
+print(resposta_ali['dist_regua'])''''
