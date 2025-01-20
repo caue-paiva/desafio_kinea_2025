@@ -104,12 +104,23 @@ import os
 from pathlib import Path
 
 class _Queries:
+    
     ARQUIVOS_SQL = [
       "tabelascar_L_anos.sql",
       "tabelascar_pl_emissores.sql",
       "tabelascar_info_fundos.sql",
       "tabelascar_info_ativos.sql"
     ]
+
+    RATINGS_POR_NIVEL_TABELACAR  = {
+            0: ["Aaa", "Aaa1", "Aaa2", "Aaa3"],
+            1: ["A1", "A2", "A3", "A4"],
+            2: ["Baa1"],
+            3: ["Baa3", "Baa4"],
+            4: ["Ba1"],
+            5: ["Pior"]
+    }
+    ANOS_FILTRAGEM_DURACAO_ATIVO = [0,2,4,6,8,10]
 
     dict_queries:dict[str,str] #mapea o nome de um arquivo/nome da query à string da propia query
     path_folder_queries:  Path
@@ -120,9 +131,24 @@ class _Queries:
         dir_atual = Path(os.getcwd())
         path_final = dir_atual.absolute().parent / Path("ScriptsSQL") / Path("TemplatesPython")
         self.path_folder_queries = path_final
-        self.read_query_files() #lé os arquivos das queries
+        self.__ler_arquivos_queries() #lé os arquivos das queries
 
-    def read_query_files(self)->None:
+    def __get_ratings_por_nivel(self,nivel_tabela_car:int)->list[str]:
+        """
+        Dado um nível da tabelacar retorna todos os ratings que correspondem ao nível, sendo iguais ou inferiores
+        """
+        lista_ratings = []
+        for nivel_ratings in self.RATINGS_POR_NIVEL_TABELACAR:
+            if nivel_ratings >= nivel_tabela_car: #nível 0 é o com melhor rating, ele inclui todos abaixo
+                lista_ratings.extend(self.RATINGS_POR_NIVEL_TABELACAR[nivel_ratings]) #add esses ratings na lista
+        
+        return lista_ratings
+
+
+    def __ler_arquivos_queries(self)->None:
+        """
+        Le arquivos .sql das queries e guarda eles num dict para uso pelas outras funções
+        """
         dict_queries = {}
         for nome_arqui in self.ARQUIVOS_SQL:
           with open(self.path_folder_queries / Path(nome_arqui), "r") as file:
@@ -131,24 +157,37 @@ class _Queries:
         self.dict_queries = dict_queries
 
     def tabelascar_pl_anos_ativos(self, vencimento_maior_que:int)->DataFrame:
+        """
+        Retorna um Dataframe correspondente ao PL de crédito privado de cada fundo alocado por cada emissor, com os ativos que correspondem à esse valor por emissor tendo seu vencimento em anos maior que o argumento
+        """
         query:str = self.dict_queries["tabelascar_L_anos.sql"]
         query = query.format(anos_filtro=vencimento_maior_que)
-        print(query)
         return spark.sql(query)
       
     def tabelascar_pl_emissor(self)->DataFrame:
+        """
+        Retorna um Dataframe correspondente ao PL de crédito privado de cada fundo alocado por cada emissor, com o rating do emissor incluido
+        """
         query:str = self.dict_queries["tabelascar_pl_emissores.sql"]
         return spark.sql(query)
       
-    def tabelascar_info_fundos(self, list_ratings:list[str] )->DataFrame:
+    def tabelascar_info_fundos(self, nivel_tabela_car:int)->DataFrame:
+        """
+        Dado um nível da tabelacar, retorna o dataframe correspondente ao PL de crédito privado de cada fundo composto por ativos cujo rating corresponde (igual ou maior) ao nível da tabela_car
+        """
+        lista_ratings:list[str] = self.__get_ratings_por_nivel(nivel_tabela_car)
         query:str = self.dict_queries["tabelascar_info_fundos.sql"]
-        lista_ratings = "(" + ",".join(f"'{value}'" for value in list_ratings) + ")"
+        lista_ratings = "(" + ",".join(f"'{value}'" for value in lista_ratings) + ")"
         query  = query.format(lista_ratings=lista_ratings)
         return spark.sql(query)
 
     def tabelascar_info_ativos(self)->DataFrame:
+        """
+        Retorna informações sobre ativos de crédito privado, como seu rating, seu emissor, o rating do seu emissor e o tempo até ele vencer
+        """
         query:str = self.dict_queries["tabelascar_info_ativos.sql"]
         return spark.sql(query)  
+
 
 # COMMAND ----------
 
@@ -249,23 +288,44 @@ class DadosAlocacao:
 
     def __atualizar_tabelas_arg(self,tabela:str):
         if tabela == "tabelascar_L_anos.sql":
-            pass
+            print("atualiza tabela de L anos")
+            self.__calcula_niveis_tabelascar_L_anos()
         elif tabela == "tabelascar_info_fundos.sql":
-            pass
+            print("atualiza info fundos")
+            self.__calcula_niveis_info_fundos()
         else:
             raise Exception("Tabela com argumento passada para essa função não teve sua lógica implementada")
 
     def __atualizar_dados(self,tabela:str)->None:
         if tabela in self.__METODOS_COM_ARGS:
-            pass #logica especial
+            print("atualiza especial")
+            self.__atualizar_tabelas_arg(tabela)
         else:        
             df = self.__MAPA_TABELAS_METODOS[tabela]().toPandas()
             path = str(self.path_folder_dados / Path(f"{tabela}.csv"))
             df.to_csv(path,index=False)
             #df.write.csv(path, mode="overwrite")
-            self.datas_atualizacao[tabela] = datetime.now()
+        self.datas_atualizacao[tabela] = datetime.now()
         
-            
+    def __calcula_niveis_info_fundos(self)->None:
+        """
+        Calcula Dataframes da tabela de info fundos (PL de crédito privado de cada fundo filtrado por rating) de acordo com cada nível da tabelacar, do nível 0 (com melhores ratings) até abaixo. Salva todos os arquivos em formato csv. Os arquivos são nomeados dessa forma:  "tabelascar_info_fundos_nivel{num_nivel}.csv"
+        """
+        for nivel in self.__QUERIES.RATINGS_POR_NIVEL_TABELACAR:
+            df = self.__QUERIES.tabelascar_info_fundos(nivel).toPandas()
+            path = str(self.path_folder_dados / Path(f"tabelascar_info_fundos.sql{nivel}.csv"))
+            df.to_csv(path,index=False)
+        self.datas_atualizacao["tabelascar_info_fundos.sql"] = datetime.now()
+
+    def __calcula_niveis_tabelascar_L_anos(self)->None:
+        """
+        Calcula os dataframes da tabela de crédito privado de um fundo, agregado por emissor mas contando apenas os ativos de cada emissor com data de expiração (em anos) igual or maior que certo número. Salva todos os arquivos em formato csv. Os arquivos são nomeados dessa forma:  "tabelascar_L_anos{ano}.csv"
+        """
+        for ano in self.__QUERIES.ANOS_FILTRAGEM_DURACAO_ATIVO:
+            df = self.__QUERIES.tabelascar_pl_anos_ativos(ano).toPandas()
+            path = str(self.path_folder_dados / Path(f"tabelascar_L_anos{ano}.csv"))
+            df.to_csv(path,index=False)
+            self.datas_atualizacao["tabelascar_L_anos.sql"] = datetime.now()
 
 
 # COMMAND ----------
