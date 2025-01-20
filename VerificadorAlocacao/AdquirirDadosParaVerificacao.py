@@ -103,9 +103,7 @@ print(df.info())
 import os
 from pathlib import Path
 
-class __Queries:
-
-
+class _Queries:
     ARQUIVOS_SQL = [
       "tabelascar_L_anos.sql",
       "tabelascar_pl_emissores.sql",
@@ -132,16 +130,20 @@ class __Queries:
         
         self.dict_queries = dict_queries
 
-    def tabelascar_pl_anos_ativos(self,vencimento_maior_que:int)->DataFrame:
+    def tabelascar_pl_anos_ativos(self, vencimento_maior_que:int)->DataFrame:
         query:str = self.dict_queries["tabelascar_L_anos.sql"]
+        query = query.format(anos_filtro=vencimento_maior_que)
+        print(query)
         return spark.sql(query)
       
     def tabelascar_pl_emissor(self)->DataFrame:
         query:str = self.dict_queries["tabelascar_pl_emissores.sql"]
         return spark.sql(query)
       
-    def tabelascar_info_fundos(self)->DataFrame:
+    def tabelascar_info_fundos(self, list_ratings:list[str] )->DataFrame:
         query:str = self.dict_queries["tabelascar_info_fundos.sql"]
+        lista_ratings = "(" + ",".join(f"'{value}'" for value in list_ratings) + ")"
+        query  = query.format(lista_ratings=lista_ratings)
         return spark.sql(query)
 
     def tabelascar_info_ativos(self)->DataFrame:
@@ -151,8 +153,58 @@ class __Queries:
 # COMMAND ----------
 
 
-que = __Queries()
+que = _Queries()
 
-df = que.tabelascar_info_fundos()
+df = que.tabelascar_pl_emissor() 
 print(df.show())
 
+
+# COMMAND ----------
+
+from dataclasses import dataclass
+import pandas as pd
+
+@dataclass
+class EstadoDado:
+    nome_csv:str
+    data_atualizacao: datetime
+
+
+
+class DadosAlocacao:
+    
+    # ()
+    __QUERIES = _Queries()
+    __ARQUIVOS_SQL: list[str] = __QUERIES.ARQUIVOS_SQL
+    __ARQUIVOS_DATAS = "datas_atualizacao.csv"
+
+    datas_atualizacao:dict[str,datetime] #dado o nome de uma query/tabela diz qual foi a última vez que ela foi atualizada
+    path_folder_dados:Path
+
+    def __init__(self):
+        dir_atual = Path(os.getcwd())
+        path_final = dir_atual / Path("DadosVerificacao")
+        for p in path_final.iterdir():
+            with open(p, "r") as file:
+                print(file.read())
+
+        self.path_folder_dados = path_final
+        self.__ler_arquivo_datas()
+    
+
+    def __ler_arquivo_datas(self)->None:
+        if not Path(self.__ARQUIVOS_DATAS).exists():
+            pass
+        
+        path = self.path_folder_dados / Path(self.__ARQUIVOS_DATAS)
+        #print("path final: ",path)
+       # with open(path, "r") as file:
+        #    print(file.read())
+        #datas_df = pd.read_csv(path)
+        #print(datas_df)
+            
+
+
+# COMMAND ----------
+
+dados = DadosAlocacao()

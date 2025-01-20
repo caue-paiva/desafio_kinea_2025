@@ -82,7 +82,7 @@ JOIN
       JOIN desafio_kinea.boletagem_cp.ratinggrupoatual ON NomeGrupo = Emissor 
     )
     ON  t1.Product = Ativo
-    WHERE ExpiracaoAnos >= {} --filtra pelos anos até expiração
+    WHERE ExpiracaoAnos >= {anos_filtro} --filtra pelos anos até expiração
     GROUP BY Emissor,RatingGrupo, t2.TradingDesk
 ) AS tabela_emissor
 ON pl_total_fundo.Codigo = tabela_emissor.TradingDesk --join pela coluna de fundos entre a tabela de PL total e a tabela de PL filtrada por emissor

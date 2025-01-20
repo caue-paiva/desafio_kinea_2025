@@ -83,5 +83,5 @@ JOIN --subquery para o rating dos atiivos
   JOIN desafio_kinea.boletagem_cp.ratinggrupoatual ON NomeGrupo = Emissor 
 )
 ON  t1.Product = Ativo
-WHERE RatingOp IN ('Baa3','Baa4') --filtra pelo rating
+WHERE RatingOp IN {lista_ratings} --filtra pelo rating
 GROUP BY t1.TradingDesk
