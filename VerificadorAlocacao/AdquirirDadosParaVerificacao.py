@@ -211,18 +211,18 @@ class DadosAlocacao:
     __ARQUIVOS_SQL: list[str] = __QUERIES.ARQUIVOS_SQL
     __ARQUIVOS_DATAS = "datas_atualizacao.csv"
     __DATAS_PARA_ATUALIZAR:dict = {
-        "tabelascar_pl_emissores.sql": timedelta(weeks=1),
-        "tabelascar_L_anos.sql": timedelta(weeks=1),
-        "tabelascar_info_fundos.sql": timedelta(weeks=1),
-        "tabelascar_info_ativos.sql": timedelta(weeks=1)
+        "tabelascar_pl_emissores": timedelta(weeks=1),
+        "tabelascar_L_anos": timedelta(weeks=1),
+        "tabelascar_info_fundos": timedelta(weeks=1),
+        "tabelascar_info_ativos": timedelta(weeks=1)
     }
     __MAPA_TABELAS_METODOS:dict = {
-        "tabelascar_pl_emissores.sql": __QUERIES.tabelascar_pl_emissor,
-        "tabelascar_L_anos.sql":  __QUERIES.tabelascar_pl_anos_ativos,
-        "tabelascar_info_fundos.sql": __QUERIES.tabelascar_info_fundos,
-        "tabelascar_info_ativos.sql": __QUERIES.tabelascar_info_ativos
+        "tabelascar_pl_emissores": __QUERIES.tabelascar_pl_emissor,
+        "tabelascar_L_anos":  __QUERIES.tabelascar_pl_anos_ativos,
+        "tabelascar_info_fundos": __QUERIES.tabelascar_info_fundos,
+        "tabelascar_info_ativos": __QUERIES.tabelascar_info_ativos
     }
-    __METODOS_COM_ARGS = ["tabelascar_L_anos.sql","tabelascar_info_fundos.sql"]
+    __METODOS_COM_ARGS = ["tabelascar_L_anos","tabelascar_info_fundos"]
 
     datas_atualizacao:dict[str, datetime | None] #dado o nome de uma query/tabela diz qual foi a última vez que ela foi atualizada
     path_folder_dados:Path
@@ -244,27 +244,24 @@ class DadosAlocacao:
         except Exception as e:
             print("Falha ao ler arquivo de datas atualizacao, criando novo arquivo")
             datas_df = pd.DataFrame(columns=["nome_tabela","data_atualizacao"])
-            for i in self.__ARQUIVOS_SQL:
+            for i in self.__DATAS_PARA_ATUALIZAR:
                 new_row = pd.DataFrame({"nome_tabela": [i], "data_atualizacao": [None]})
                 datas_df = pd.concat([datas_df, new_row], ignore_index=True)
             datas_df.to_csv(path,index=False)
 
         datas_atualizacao = {}
-        for row in datas_df.itertuples():
-            print(row.data_atualizacao)
-            if isinstance(row.data_atualizacao, float): #nan/null
+        for row in datas_df.itertuples():   
+            if isinstance(row.data_atualizacao, float) or row.data_atualizacao is None : #nan/null
                 data  = None
             else:
                 data = datetime.strptime(row.data_atualizacao, "%Y-%m-%d %H:%M:%S.%f")
             datas_atualizacao[row.nome_tabela] = data
-        print(datas_df)
         self.datas_atualizacao = datas_atualizacao
 
     def __escreve_arquivo_datas(self)->None:
-        print("atualizando datas")
         path = self.path_folder_dados / Path(self.__ARQUIVOS_DATAS)
         datas_df = pd.DataFrame(columns=["nome_tabela","data_atualizacao"])
-        for i in self.__ARQUIVOS_SQL:
+        for i in self.__DATAS_PARA_ATUALIZAR:
             new_row = pd.DataFrame({"nome_tabela": [i], "data_atualizacao": [self.datas_atualizacao[i]]})
             datas_df = pd.concat([datas_df, new_row], ignore_index=True)
         datas_df.to_csv(path,index=False)
@@ -287,10 +284,10 @@ class DadosAlocacao:
             self.__escreve_arquivo_datas()
 
     def __atualizar_tabelas_arg(self,tabela:str):
-        if tabela == "tabelascar_L_anos.sql":
+        if tabela == "tabelascar_L_anos":
             print("atualiza tabela de L anos")
             self.__calcula_niveis_tabelascar_L_anos()
-        elif tabela == "tabelascar_info_fundos.sql":
+        elif tabela == "tabelascar_info_fundos":
             print("atualiza info fundos")
             self.__calcula_niveis_info_fundos()
         else:
@@ -313,9 +310,9 @@ class DadosAlocacao:
         """
         for nivel in self.__QUERIES.RATINGS_POR_NIVEL_TABELACAR:
             df = self.__QUERIES.tabelascar_info_fundos(nivel).toPandas()
-            path = str(self.path_folder_dados / Path(f"tabelascar_info_fundos.sql{nivel}.csv"))
+            path = str(self.path_folder_dados / Path(f"tabelascar_info_fundos{nivel}.csv"))
             df.to_csv(path,index=False)
-        self.datas_atualizacao["tabelascar_info_fundos.sql"] = datetime.now()
+        self.datas_atualizacao["tabelascar_info_fundos"] = datetime.now()
 
     def __calcula_niveis_tabelascar_L_anos(self)->None:
         """
@@ -325,9 +322,52 @@ class DadosAlocacao:
             df = self.__QUERIES.tabelascar_pl_anos_ativos(ano).toPandas()
             path = str(self.path_folder_dados / Path(f"tabelascar_L_anos{ano}.csv"))
             df.to_csv(path,index=False)
-            self.datas_atualizacao["tabelascar_L_anos.sql"] = datetime.now()
+            self.datas_atualizacao["tabelascar_L_anos"] = datetime.now()
+
+    def __ler_csv(self,nome_tabela:str)->pd.DataFrame | None:
+        try:
+            path = self.path_folder_dados / Path(f"{nome_tabela}")
+            df = pd.read_csv(path)
+            return df
+        except Exception as e:
+            print(f"Falha ao ler o arquivo: {path}/{nome_tabela}. Erro: {e}")
+            return None
+
+    def get_pl_e_rating_por_emissor(self)->pd.DataFrame | None:
+        """
+        Retorna uma tabela com o  PL de crédito privado de cada emissor em cada fundo, com os ratings de cada emissor.
+        """
+        self.__verifica_dados_atualizados() #verifica se dados estão atualizados
+        return self.__ler_csv("tabelascar_pl_emissores.csv")
+
+    def get_pl_fundo_rating(self,rating:str)->pd.DataFrame | None:
+        """
+        Retorna o PL de crédito privado de um fundo filtrando por ativos com rating igual ou pior que o especificado
+        """
+        self.__verifica_dados_atualizados(f"tabelascar_info_fundos{rating}.csv")
+        pass
+
+    def get_pl_emissor_vencimento_anos(self,anos_vencimentos:int)->pd.DataFrame | None:
+        """
+        Retorna uma tabela com o  PL de crédito privado de cada emissor em cada fundo, porém apenas contabilizando os ativos que tem data de vencimento igual ou maior que o especificado.
+        """
+        self.__verifica_dados_atualizados(f"tabelascar_L_anos{anos_vencimentos}.csv")
+        pass
+
+    def get_info_rating_ativos(self)->pd.DataFrame | None:
+        """
+        Retorna um DF com as informações de cada ativo, como seu rating, seu emissor e qual o rating do seu emissor
+        """
+        self.__verifica_dados_atualizados()
+        return self.__ler_csv("tabelascar_info_ativos.csv")
+
+
+
 
 
 # COMMAND ----------
 
 dados = DadosAlocacao()
+
+df = dados.get_info_rating_ativos()
+print(df.info())
