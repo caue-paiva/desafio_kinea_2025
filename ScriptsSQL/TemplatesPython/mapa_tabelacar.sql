@@ -1,0 +1,1 @@
+SELECT DISTINCT * FROM desafio_kinea.boletagem_cp.fundostipocar

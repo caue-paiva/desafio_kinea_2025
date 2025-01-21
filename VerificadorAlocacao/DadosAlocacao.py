@@ -15,7 +15,8 @@ class _Queries:
       "tabelascar_info_ativos.sql",
       "PL_total_fundo.sql",
       "PL_credito_privado_por_fundo.sql",
-      #"PL_total_e_credito_privado_fundos.sql"
+      #"PL_total_e_credito_privado_fundos.sql",
+      "mapa_tabelacar.sql"
     ]
     RATINGS_ORDENADOS  = [
         "Aaa", "Aa2", "Aa3",
@@ -109,6 +110,13 @@ class _Queries:
         query = self.dict_queries["PL_credito_privado_por_fundo.sql"]
         return spark.sql(query)
     
+    def mapa_tabelacar(self)->DataFrame:
+        """
+        Retorna um DF com o mapa da tabela car
+        """
+        query = self.dict_queries["mapa_tabelacar.sql"]
+        return spark.sql(query)
+    
 class DadosAlocacao:
     
     __QUERIES = _Queries()
@@ -120,7 +128,8 @@ class DadosAlocacao:
         "tabelascar_info_fundos": timedelta(days=1),
         "tabelascar_info_ativos": timedelta(days=1),
         "PL_total_fundo": timedelta(days=1),
-        "PL_credito_privado_por_fundo": timedelta(days=1)
+        "PL_credito_privado_por_fundo": timedelta(days=1),
+        "mapa_tabelacar": timedelta(weeks=1),
     }
     __MAPA_TABELAS_METODOS:dict = {
         "tabelascar_pl_emissores": __QUERIES.tabelascar_pl_emissor,
@@ -128,7 +137,8 @@ class DadosAlocacao:
         "tabelascar_info_fundos": __QUERIES.tabelascar_info_fundos,
         "tabelascar_info_ativos": __QUERIES.tabelascar_info_ativos,
         "PL_total_fundo": __QUERIES.pl_total_fundos,
-        "PL_credito_privado_por_fundo": __QUERIES.pl_credito_privado_fundos
+        "PL_credito_privado_por_fundo": __QUERIES.pl_credito_privado_fundos,
+        "mapa_tabelacar": __QUERIES.mapa_tabelacar
     }
     __METODOS_COM_ARGS = ["tabelascar_L_anos","tabelascar_info_fundos"]
 
@@ -286,3 +296,5 @@ class DadosAlocacao:
         self.__verifica_dados_atualizados()
         return self.__ler_csv("PL_credito_privado_por_fundo.csv")
 
+
+dados = DadosAlocacao()

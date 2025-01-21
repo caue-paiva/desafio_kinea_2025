@@ -180,7 +180,7 @@ from DadosAlocacao import DadosAlocacao
 
 
 dados = DadosAlocacao()
-df_ativos = dados.get_info_rating_ativos()
+
 df_pl_por_emissor = dados.get_pl_e_rating_por_emissor()
 display(df_pl_por_emissor)
 #print(df_pl_por_emissor.info())
@@ -209,11 +209,7 @@ df_regua_fundo_valor = pd.DataFrame(fundo_dist_regua)
 
 #Buscar qual é o rating do fundo | RatingOp
 
-caminho_base = "../ScriptsSQL"
-caminho = caminho_base +'/' + 'tabelascar_info_ativos' + '.sql'
-with open(caminho, 'r') as f:
-    query = f.read()
-df_ativos = spark.sql(query).toPandas() #query na tabela de informações e ratings dos ativos e emissores
+df_ativos = dados.get_info_rating_ativos() #df com informações sobre cada ativo,ratings e emissores
 display(df_ativos)
 
 rating_ativo = df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0] #pegar dados sobre o ativo,seus rating, o seu emissor e rating do emissor
@@ -225,6 +221,8 @@ print(rating_emissor,emissor_nome)
 dict_fundos_tipoCAR = {}
 for fundo in fundo_dist_regua["fundo"]:
     dict_fundos_tipoCAR[fundo] = spark.sql(f"SELECT DISTINCT TipoCAR FROM desafio_kinea.boletagem_cp.fundostipocar WHERE Fundo = '{fundo}'").collect()[0][0]
+
+print(dict_fundos_tipoCAR)
 
 for fundo in df_regua_fundo_valor["fundo"]:
     tabela_car_fundo = spark.sql(f"select * from {mapeamento_fundos_tabela_car[dict_fundos_tipoCAR[fundo]]}").toPandas()
