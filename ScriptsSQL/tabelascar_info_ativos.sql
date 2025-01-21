@@ -11,7 +11,7 @@ da tabela cadastroativo e achar seu emissor por um join com o emissor ID, mas n√
 SELECT DISTINCT 
   Emissor, 
   Ativo, 
-  FLOOR(DATEDIFF(Vencimento,CURRENT_DATE) / 365) AS ExpiracaoAnos,
+  FLOOR(DATEDIFF(Vencimento,CURRENT_DATE) / 360) AS ExpiracaoAnos, -- #mudar para 360
   RatingOp,
   RatingGrupo 
 FROM desafio_kinea.boletagem_cp.agendacp

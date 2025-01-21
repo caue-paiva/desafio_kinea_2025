@@ -75,7 +75,7 @@ JOIN
     SELECT DISTINCT 
       Emissor, 
       Ativo, 
-      FLOOR(DATEDIFF(Vencimento,CURRENT_DATE) / 365) AS ExpiracaoAnos,
+      FLOOR(DATEDIFF(Vencimento,CURRENT_DATE) / 360) AS ExpiracaoAnos,
       RatingOp,
       RatingGrupo 
     FROM desafio_kinea.boletagem_cp.agendacp
