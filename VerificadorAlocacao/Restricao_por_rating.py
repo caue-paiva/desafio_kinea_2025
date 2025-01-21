@@ -73,7 +73,7 @@ mapeamento_fundos_tabela_car = {
 # Por enquanto, somente utilizando uma lista de fundos para teste
 
 # FUNDO 389 não tem na tabela dos fundos que apareceram em desafio_kinea.boletagem_cp.fundostipocar
-lista_fundos = ["KAT", "ID2", "FRA", "APP", "PAL", "652", "PDA", "APO", "PID", "678", "KRF", "KCP", "BVP", "RFA", "KOP", "134", "CPI", "846", "IRF"]
+# lista_fundos = ["KAT", "ID2", "FRA", "APP", "PAL", "652", "PDA", "APO", "PID", "678", "KRF", "KCP", "BVP", "RFA", "KOP", "134", "CPI", "846", "IRF"]
 
 
 
@@ -204,7 +204,9 @@ with open(caminho, 'r') as f:
     query = f.read()
 df_ativos = spark.sql(query).toPandas()
 
-df_regua_fundo_valor = pd.DataFrame(fundo_dist_regua)
+rating_ativo = df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0]
+rating_emissor = df_ativos[df_ativos["Ativo"] == ativo]["Emissor"].values[0]
+
 
 dict_fundos_tipoCAR = {}
 for fundo in fundo_dist_regua["fundo"]:
@@ -216,27 +218,36 @@ for fundo in df_regua_fundo_valor["fundo"]:
     ratings_igual_abaixo = get_ratings_igual_abaixo(df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0],
                                                     mapeamento_fundos_tabela_car[dict_fundos_tipoCAR[fundo]])
     
+    print(ratings_igual_abaixo)
+    
     ratings = []
     for key,val in ratings_igual_abaixo.items():
         for rating in val:
             ratings.append(rating)
+            
+    # Linha referente ao rating do ativo específico e a tabela car referente ao fundo
+    linha_tabela_car = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_abaixo.keys()))]
 
-    fundo_sum_position = query_fundo_sum_position(ratings).toPandas()
+    display(linha_tabela_car)
 
-    fundo_sum_position["porcentagem_pl"] = fundo_sum_position["pl_credito_privado"] / fundo_sum_position["pl_total"]
+    fundo_sum_position_pl_total = query_fundo_sum_position(ratings).toPandas()
 
-    fundo_porcentagem_pl = fundo_sum_position[fundo_sum_position["TradingDesk"] == fundo]["porcentagem_pl"].values[0]
+    display(fundo_sum_position_pl_total)
 
-    tabela_car_max_pl = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_abaixo.keys()))]["MaxPL"].values[0]
+    fundo_sum_position_pl_total["porcentagem_pl"] = fundo_sum_position_pl_total["pl_credito_privado"] / fundo_sum_position_pl_total["pl_total"]
 
-    if fundo_porcentagem_pl > tabela_car_max_pl:
-        # TODO se entrar, deve fazer a construção do DF de realocação.
-        print("entrou aqui")
-    else:
-        # Printando a porcetagem à titulo de curiosidade
-        print(fundo, fundo_porcentagem_pl)
-        print(fundo, tabela_car_max_pl)
-        print("eh isto aí")
+    fundo_porcentagem_pl = fundo_sum_position_pl_total[fundo_sum_position_pl_total["TradingDesk"] == fundo]["porcentagem_pl"].values[0]
+
+
+    # Verificação como stub
+    # if fundo_porcentagem_pl > tabela_car_max_pl:
+    #     # TODO se entrar, deve fazer a construção do DF de realocação.
+    #     print("entrou aqui")
+    # else:
+    #     # Printando a porcetagem à titulo de curiosidade
+    #     print(fundo, fundo_porcentagem_pl)
+    #     print(fundo, tabela_car_max_pl)
+    #     print("eh isto aí")
 
 
 # COMMAND ----------
