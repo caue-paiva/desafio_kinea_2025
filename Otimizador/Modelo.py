@@ -165,8 +165,8 @@ dataframes = extrair_informacoes()
 # COMMAND ----------
 
 # DBTITLE 1,Função Principal
-#Função Principal
-def solucao(checagens: List[Callable],ordens: pd.DataFrame,informacoes: List[pd.DataFrame]) -> pd.DataFrame:
+#Cálculo Régua Macro
+def solucao(ativo:str,checagens: List[Callable],ordens: pd.DataFrame,informacoes: List[pd.DataFrame]) -> pd.DataFrame:
     '''
     Função principal que recebe como input:
     1. checagens: Lista de funções geradas pelo ChatGPT
@@ -175,10 +175,6 @@ def solucao(checagens: List[Callable],ordens: pd.DataFrame,informacoes: List[pd.
     1. ordens_final: DatFrame ['Ticker','Amount','Price','Fundo'] representando quanto irá para cada fundo
     '''
     #Essas  etapas são para 1 ordem -> 1 linha do dataframe ordens
-    
-
-    #Extrair ativo da ordem
-    ativo = 'INDIGO FIAGRO DCA EMISSAO 1 SERIE 1 SENIOR'
 
     #Extrair dataframes necessários
     inf_fundos = dataframes[0]
@@ -207,8 +203,7 @@ def solucao(checagens: List[Callable],ordens: pd.DataFrame,informacoes: List[pd.
     #Retornar Regua
     return regua
    
-
-teste = solucao([],pd.DataFrame(),dataframes)
+teste = solucao('INDIGO FIAGRO DCA EMISSAO 1 SERIE 1 SENIOR',[],pd.DataFrame(),dataframes)
 print(teste)
 
 # COMMAND ----------
