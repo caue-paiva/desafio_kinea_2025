@@ -12,96 +12,10 @@ Dados que serão extraídos:
 
 # COMMAND ----------
 
-from pyspark.sql import DataFrame
-from datetime import datetime
-
-class DadosAlocacao:
-
-    df_pl_fundos: DataFrame
-    df_pl_credito_privado: DataFrame
-    df_book_ativos: DataFrame
-    data_extracao_dados: datetime
-
-    def __init__(self):
-        self.__atualizar_dados()
-
-    def __atualizar_dados(self)->None:
-        self.df_pl_fundos = self.__get_pl_fundos_aux()
-        self.df_pl_credito_privado = self.__get_pl_credito_privado_aux()
-        self.df_book_ativos = self.__get_book_ativos_aux()
-        self.data_extracao_dados = datetime.now()
-
-    def __get_pl_fundos_aux(self):
-        """
-        Retorna um Dataframe com as colunas Código (do fundo), Data e PL do fundo mais atualizado.
-        """
-        return spark.sql("""
-            SELECT t1.Codigo,t1.Data,t1.PL
-            FROM desafio_kinea.boletagem_cp.cotas as t1
-            JOIN (
-                SELECT Codigo, MAX(Data) AS MaxData
-                FROM desafio_kinea.boletagem_cp.cotas
-                GROUP BY Codigo
-            ) t2 
-            ON t1.Codigo = t2.Codigo AND t1.Data = t2.MaxData
-            ORDER BY Data DESC;
-        """)
-
-    def __get_pl_credito_privado_aux(self):
-        pass
-
-    def __get_book_ativos_aux(self):
-        pass
-
-    def __dados_estao_atualizados(self)->bool:
-        diferen_tempo = datetime.now() - self.data_extracao_dados
-        return diferen_tempo.total_seconds() < 86400 #24 horas ou menos de diferença entre a última data de extração e a data atual
-
-    #métodos para retornar dataframes dos dados necessários
-
-    def get_df_pl_fundos(self)->DataFrame:
-        if not self.__dados_estao_atualizados(): #dados desatualizados
-           self.__atualizar_dados() #atualiza dados 
-        return self.df_pl_fundos
-
-    def get_df_pl_credito_privado(self)->DataFrame:
-        if not self.__dados_estao_atualizados(): #dados desatualizados
-           self.__atualizar_dados() #atualiza dados 
-        return self.df_pl_credito_privado
-
-    def get_df_book_ativos(self)->DataFrame:
-        if not self.__dados_estao_atualizados(): #dados desatualizados
-           self.__atualizar_dados() #atualiza dados 
-        return self.df_book_ativos
-
-    #métodos para retornar valores específicos de um fundo ou book
-
-    def get_pl_fundo(self,fundo:str)->float:
-        if not self.__dados_estao_atualizados(): #dados desatualizados
-           self.__atualizar_dados() #atualiza dados 
-
-    def get_pl_credito_privado_fundo(self,fundo:str)->float:
-        if not self.__dados_estao_atualizados(): #dados desatualizados
-           self.__atualizar_dados() #atualiza dados 
-
-    def get_book_ativo(self,ativo:str)->list[str]:
-        if not self.__dados_estao_atualizados(): #dados desatualizados
-           self.__atualizar_dados() #atualiza dados 
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC SELECT * FROM desafio_kinea.boletagem_cp.tabelacar_baixorisco
-
-# COMMAND ----------
-
-df=_sqldf.toPandas()
-print(df.info())
-
-# COMMAND ----------
-
 import os
 from pathlib import Path
+from pyspark.sql import DataFrame
+from datetime import datetime
 
 class _Queries:
     
@@ -109,17 +23,22 @@ class _Queries:
       "tabelascar_L_anos.sql",
       "tabelascar_pl_emissores.sql",
       "tabelascar_info_fundos.sql",
-      "tabelascar_info_ativos.sql"
+      "tabelascar_info_ativos.sql",
+      "PL_total_fundo.sql",
+      "PL_credito_privado_por_fundo.sql"
     ]
-
-    RATINGS_POR_NIVEL_TABELACAR  = {
-            0: ["Aaa", "Aaa1", "Aaa2", "Aaa3"],
-            1: ["A1", "A2", "A3", "A4"],
-            2: ["Baa1"],
-            3: ["Baa3", "Baa4"],
-            4: ["Ba1"],
-            5: ["Pior"]
-    }
+    RATINGS_ORDENADOS  = [
+        "Aaa", "Aa2", "Aa3",
+        "A1", "A2","A3", "A4",
+        "Baa1","Baa2", "Baa3", "Baa4",
+        "Ba1","Ba4","Ba5","Ba6",
+        "B1", "B2", "B3","B4",
+        "C1", "C2", "C3",
+        "D1", "D2", "D3",
+        "E1"
+   ]
+    
+    #primeiro índice = melhor rating = está no menor nível (0 da tabelacar)
     ANOS_FILTRAGEM_DURACAO_ATIVO = [0,2,4,6,8,10]
 
     dict_queries:dict[str,str] #mapea o nome de um arquivo/nome da query à string da propia query
@@ -133,17 +52,15 @@ class _Queries:
         self.path_folder_queries = path_final
         self.__ler_arquivos_queries() #lé os arquivos das queries
 
-    def __get_ratings_por_nivel(self,nivel_tabela_car:int)->list[str]:
+    def __get_ratings_iguais_ou_inferiores(self,rating:str)->list[str]:
         """
-        Dado um nível da tabelacar retorna todos os ratings que correspondem ao nível, sendo iguais ou inferiores
+        Dado um rating da tabelacar retorna todos os ratings iguais ou inferiores
         """
-        lista_ratings = []
-        for nivel_ratings in self.RATINGS_POR_NIVEL_TABELACAR:
-            if nivel_ratings >= nivel_tabela_car: #nível 0 é o com melhor rating, ele inclui todos abaixo
-                lista_ratings.extend(self.RATINGS_POR_NIVEL_TABELACAR[nivel_ratings]) #add esses ratings na lista
-        
-        return lista_ratings
-
+        rating_parsed = rating.lower().strip()
+        for i,nivel_ratings in enumerate(self.RATINGS_ORDENADOS):
+            if nivel_ratings.lower() == rating_parsed: #achou rating
+                return self.RATINGS_ORDENADOS[i:] #retorna a lista a partir desse rating
+        return []
 
     def __ler_arquivos_queries(self)->None:
         """
@@ -171,11 +88,11 @@ class _Queries:
         query:str = self.dict_queries["tabelascar_pl_emissores.sql"]
         return spark.sql(query)
       
-    def tabelascar_info_fundos(self, nivel_tabela_car:int)->DataFrame:
+    def tabelascar_info_fundos(self, rating:str)->DataFrame:
         """
-        Dado um nível da tabelacar, retorna o dataframe correspondente ao PL de crédito privado de cada fundo composto por ativos cujo rating corresponde (igual ou maior) ao nível da tabela_car
+        Dado um nível da tabelacar, retorna o dataframe correspondente ao PL de crédito privado de cada fundo composto por ativos com rating piores ou igual ao especificado
         """
-        lista_ratings:list[str] = self.__get_ratings_por_nivel(nivel_tabela_car)
+        lista_ratings:list[str] = self.__get_ratings_iguais_ou_inferiores(rating)
         query:str = self.dict_queries["tabelascar_info_fundos.sql"]
         lista_ratings = "(" + ",".join(f"'{value}'" for value in lista_ratings) + ")"
         query  = query.format(lista_ratings=lista_ratings)
@@ -188,12 +105,24 @@ class _Queries:
         query:str = self.dict_queries["tabelascar_info_ativos.sql"]
         return spark.sql(query)  
 
+    def pl_total_fundos(self)->DataFrame:
+        """
+        Retorna um DF com o PL total de cada fundo
+        """
+        query = self.dict_queries["PL_total_fundo.sql"]
+        return spark.sql(query)
+    
+    def pl_credito_privado_fundos(self)->DataFrame:
+        """
+        Retorna um DF com o PL de crédito privado de cada fundo
+        """
+        query = self.dict_queries["PL_credito_privado_por_fundo.sql"]
+        return spark.sql(query)
 
 # COMMAND ----------
 
 
 que = _Queries()
-
 df = que.tabelascar_pl_emissor() 
 print(df.show())
 
@@ -211,16 +140,20 @@ class DadosAlocacao:
     __ARQUIVOS_SQL: list[str] = __QUERIES.ARQUIVOS_SQL
     __ARQUIVOS_DATAS = "datas_atualizacao.csv"
     __DATAS_PARA_ATUALIZAR:dict = {
-        "tabelascar_pl_emissores": timedelta(weeks=1),
-        "tabelascar_L_anos": timedelta(weeks=1),
-        "tabelascar_info_fundos": timedelta(weeks=1),
-        "tabelascar_info_ativos": timedelta(weeks=1)
+        "tabelascar_pl_emissores": timedelta(days=1),
+        "tabelascar_L_anos": timedelta(days=1),
+        "tabelascar_info_fundos": timedelta(days=1),
+        "tabelascar_info_ativos": timedelta(days=1),
+        "PL_total_fundo": timedelta(days=1),
+        "PL_credito_privado_por_fundo": timedelta(days=1)
     }
     __MAPA_TABELAS_METODOS:dict = {
         "tabelascar_pl_emissores": __QUERIES.tabelascar_pl_emissor,
         "tabelascar_L_anos":  __QUERIES.tabelascar_pl_anos_ativos,
         "tabelascar_info_fundos": __QUERIES.tabelascar_info_fundos,
-        "tabelascar_info_ativos": __QUERIES.tabelascar_info_ativos
+        "tabelascar_info_ativos": __QUERIES.tabelascar_info_ativos,
+        "PL_total_fundo": __QUERIES.pl_total_fundos,
+        "PL_credito_privado_por_fundo": __QUERIES.pl_credito_privado_fundos
     }
     __METODOS_COM_ARGS = ["tabelascar_L_anos","tabelascar_info_fundos"]
 
@@ -250,7 +183,7 @@ class DadosAlocacao:
             datas_df.to_csv(path,index=False)
 
         datas_atualizacao = {}
-        for row in datas_df.itertuples():   
+        for row in datas_df.itertuples():  
             if isinstance(row.data_atualizacao, float) or row.data_atualizacao is None : #nan/null
                 data  = None
             else:
@@ -284,12 +217,15 @@ class DadosAlocacao:
             self.__escreve_arquivo_datas()
 
     def __atualizar_tabelas_arg(self,tabela:str):
+        """
+        Atualiza arquivos cujos métodos requerem argumentos, nesse caso são os para gerar as tabelas por ratings e por anos de expiracao dos ativos (L_anos)
+        """
         if tabela == "tabelascar_L_anos":
-            print("atualiza tabela de L anos")
+            #print("atualiza tabela de L anos")
             self.__calcula_niveis_tabelascar_L_anos()
         elif tabela == "tabelascar_info_fundos":
-            print("atualiza info fundos")
-            self.__calcula_niveis_info_fundos()
+            #print("atualiza info fundos")
+            self.__calcula_ratings_info_fundos()
         else:
             raise Exception("Tabela com argumento passada para essa função não teve sua lógica implementada")
 
@@ -304,13 +240,13 @@ class DadosAlocacao:
             #df.write.csv(path, mode="overwrite")
         self.datas_atualizacao[tabela] = datetime.now()
         
-    def __calcula_niveis_info_fundos(self)->None:
+    def __calcula_ratings_info_fundos(self)->None:
         """
-        Calcula Dataframes da tabela de info fundos (PL de crédito privado de cada fundo filtrado por rating) de acordo com cada nível da tabelacar, do nível 0 (com melhores ratings) até abaixo. Salva todos os arquivos em formato csv. Os arquivos são nomeados dessa forma:  "tabelascar_info_fundos_nivel{num_nivel}.csv"
+        Calcula Dataframes da tabela de info fundos (PL de crédito privado de cada fundo filtrado por rating) de acordo com cada rating da tabelacar, agregando ativos de rating igual ou pior para a liquidez . Salva todos os arquivos em formato csv. Os arquivos são nomeados dessa forma:  "tabelascar_info_fundos_rating_{rating}.csv"
         """
-        for nivel in self.__QUERIES.RATINGS_POR_NIVEL_TABELACAR:
-            df = self.__QUERIES.tabelascar_info_fundos(nivel).toPandas()
-            path = str(self.path_folder_dados / Path(f"tabelascar_info_fundos{nivel}.csv"))
+        for rating in self.__QUERIES.RATINGS_ORDENADOS:
+            df = self.__QUERIES.tabelascar_info_fundos(rating).toPandas()
+            path = str(self.path_folder_dados / Path(f"tabelascar_info_fundos_rating_{rating}.csv"))
             df.to_csv(path,index=False)
         self.datas_atualizacao["tabelascar_info_fundos"] = datetime.now()
 
@@ -340,19 +276,19 @@ class DadosAlocacao:
         self.__verifica_dados_atualizados() #verifica se dados estão atualizados
         return self.__ler_csv("tabelascar_pl_emissores.csv")
 
-    def get_pl_fundo_rating(self,rating:str)->pd.DataFrame | None:
+    def get_pl_fundo_por_rating(self,rating:str)->pd.DataFrame | None:
         """
         Retorna o PL de crédito privado de um fundo filtrando por ativos com rating igual ou pior que o especificado
         """
-        self.__verifica_dados_atualizados(f"tabelascar_info_fundos{rating}.csv")
-        pass
+        self.__verifica_dados_atualizados()
+        return self.__ler_csv(f"tabelascar_info_fundos_rating_{rating}.csv")
 
-    def get_pl_emissor_vencimento_anos(self,anos_vencimentos:int)->pd.DataFrame | None:
+    def get_pl_por_emissor_e_vencimento_anos(self,anos_vencimentos:int)->pd.DataFrame | None:
         """
         Retorna uma tabela com o  PL de crédito privado de cada emissor em cada fundo, porém apenas contabilizando os ativos que tem data de vencimento igual ou maior que o especificado.
         """
-        self.__verifica_dados_atualizados(f"tabelascar_L_anos{anos_vencimentos}.csv")
-        pass
+        self.__verifica_dados_atualizados()
+        return self.__ler_csv (f"tabelascar_L_anos{anos_vencimentos}.csv")
 
     def get_info_rating_ativos(self)->pd.DataFrame | None:
         """
@@ -360,6 +296,20 @@ class DadosAlocacao:
         """
         self.__verifica_dados_atualizados()
         return self.__ler_csv("tabelascar_info_ativos.csv")
+    
+    def get_pl_total_fundos(self) -> pd.DataFrame | None:
+        """
+        Retorna um DF com o PL total de cada fundo
+        """
+        self.__verifica_dados_atualizados()
+        return self.__ler_csv("PL_total_fundo.csv")
+    
+    def get_pl_credito_privado_fundos(self) -> pd.DataFrame | None:
+        """
+        Retorna um DF com o PL de crédito privado de cada fundo
+        """
+        self.__verifica_dados_atualizados()
+        return self.__ler_csv("PL_credito_privado_por_fundo.csv")
 
 
 
@@ -367,11 +317,6 @@ class DadosAlocacao:
 
 # COMMAND ----------
 
-<<<<<<< HEAD
-dados = DadosAlocacao()
-=======
-dados = DadosAlocacao()
-
-df = dados.get_info_rating_ativos()
-print(df.info())
->>>>>>> 57f6eb7a3b523cd7b021e6b2dbb91922c181d419
+dados =  DadosAlocacao()
+df = dados.get_pl_credito_privado_fundos()
+print(df)

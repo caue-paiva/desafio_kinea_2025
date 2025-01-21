@@ -61,7 +61,7 @@ tab_fundos AS (
 
 
 
-SELECT  t1.TradingDesk, SUM(Position) FROM tab_fundos as t1 --soma e acha o total de crédito privado de cada fundo
+SELECT  t1.TradingDesk, SUM(Position) as total_credito FROM tab_fundos as t1 --soma e acha o total de crédito privado de cada fundo
 JOIN --join na tabela de data mais recente, filtrando a tabela para as combinações de cada fundo - ativo mais recentes
 (
   -- acha a data mais recente para cada combinação fundo e ativo
@@ -74,7 +74,7 @@ JOIN --subquery para o rating dos atiivos
   SELECT DISTINCT 
     Emissor, 
     Ativo, 
-    FLOOR(DATEDIFF(Vencimento,CURRENT_DATE) / 365) AS ExpiracaoAnos,
+    FLOOR(DATEDIFF(Vencimento,CURRENT_DATE) / 360) AS ExpiracaoAnos,
     RatingOp,
     RatingGrupo 
   FROM desafio_kinea.boletagem_cp.agendacp
