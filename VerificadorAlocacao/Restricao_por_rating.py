@@ -176,6 +176,17 @@ ON pl_total_fundo.Codigo = tabela_emissor.TradingDesk"""
 
 # COMMAND ----------
 
+from DadosAlocacao import DadosAlocacao
+
+
+dados = DadosAlocacao()
+df_ativos = dados.get_info_rating_ativos()
+df_pl_por_emissor = dados.get_pl_e_rating_por_emissor()
+display(df_pl_por_emissor)
+#print(df_pl_por_emissor.info())
+
+# COMMAND ----------
+
 #Pegar a régua que foi dada pelo João
 
 # df de [Fundo | alocacao], código do fundo
@@ -202,11 +213,14 @@ caminho_base = "../ScriptsSQL"
 caminho = caminho_base +'/' + 'tabelascar_info_ativos' + '.sql'
 with open(caminho, 'r') as f:
     query = f.read()
-df_ativos = spark.sql(query).toPandas()
+df_ativos = spark.sql(query).toPandas() #query na tabela de informações e ratings dos ativos e emissores
+display(df_ativos)
 
-rating_ativo = df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0]
-rating_emissor = df_ativos[df_ativos["Ativo"] == ativo]["Emissor"].values[0]
+rating_ativo = df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0] #pegar dados sobre o ativo,seus rating, o seu emissor e rating do emissor
+rating_emissor = df_ativos[df_ativos["Ativo"] == ativo]["RatingGrupo"].values[0]
+emissor_nome:str = df_ativos[df_ativos["Ativo"] == ativo]["Emissor"].values[0]
 
+print(rating_emissor,emissor_nome)
 
 dict_fundos_tipoCAR = {}
 for fundo in fundo_dist_regua["fundo"]:
@@ -239,6 +253,8 @@ for fundo in df_regua_fundo_valor["fundo"]:
     fundo_porcentagem_pl = fundo_sum_position_pl_total[fundo_sum_position_pl_total["TradingDesk"] == fundo]["porcentagem_pl"].values[0]
 
 
+    pl_emissor_no_fundo:float = df_pl_por_emissor[(df_pl_por_emissor["Emissor"] ==  emissor_nome) & (df_pl_por_emissor["TradingDesk"] == fundo)]["pl_emissor"].values[0]
+    print(pl_emissor_no_fundo)
     # Verificação como stub
     # if fundo_porcentagem_pl > tabela_car_max_pl:
     #     # TODO se entrar, deve fazer a construção do DF de realocação.

@@ -1,21 +1,10 @@
-# Databricks notebook source
-"""
-Script para poder pegar dados atualizados para conseguir a verificação da alocação
-
-Dados que serão extraídos:
-
-1) PL de cada fundo
-2) PL de cŕedito privado de cada fundo
-3) Book(s) de um ativo
-
-"""
-
-# COMMAND ----------
-
 import os
 from pathlib import Path
 from pyspark.sql import DataFrame
-from datetime import datetime
+from dataclasses import dataclass
+import pandas as pd
+import math
+from datetime import timedelta, datetime
 
 class _Queries:
     
@@ -119,22 +108,7 @@ class _Queries:
         """
         query = self.dict_queries["PL_credito_privado_por_fundo.sql"]
         return spark.sql(query)
-
-# COMMAND ----------
-
-
-que = _Queries()
-df = que.tabelascar_pl_emissor() 
-print(df.show())
-
-
-# COMMAND ----------
-
-from dataclasses import dataclass
-import pandas as pd
-import math
-from datetime import timedelta, datetime
-
+    
 class DadosAlocacao:
     
     __QUERIES = _Queries()
@@ -312,12 +286,3 @@ class DadosAlocacao:
         self.__verifica_dados_atualizados()
         return self.__ler_csv("PL_credito_privado_por_fundo.csv")
 
-
-
-
-
-# COMMAND ----------
-
-dados =  DadosAlocacao()
-df = dados.get_pl_credito_privado_fundos()
-print(df)
