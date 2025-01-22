@@ -1,6 +1,7 @@
 # Databricks notebook source
 import pandas as pd
 import re
+from dataclasses import dataclass
 
 def primeiro_numero_e_posicao(string:str)->tuple[int,int]:
     for i,char in enumerate(string):
@@ -241,9 +242,18 @@ mapeamento_fundos_tabela_car = {
 
 # COMMAND ----------
 
+"""
+O output do código de verifição da tabelacar vai ser essa classe com o dataframe com esse schema
+"""
+
 df_resultado_regua = pd.DataFrame(
-    columns=["fundo","valor_alocacao_inicial","diferenca_porcentagem_ano","diferenca_total_ano","diferenca_porcentagem_emissor","diferenca_total_emissor","diferenca_porcentagem_pl_privado","diferenca_total_pl_privado"]
+    columns=[
+        "fundo","valor_alocacao_inicial","diferenca_porcentagem_ano","diferenca_total_ano","diferenca_porcentagem_emissor",
+        "diferenca_total_emissor","diferenca_porcentagem_pl_privado","diferenca_total_pl_privado", "passou_em_tudo", "passou_max_pl",
+        "passou_max_emissor","passou_l_anos"
+    ]
 )
+
 
 # COMMAND ----------
 
