@@ -274,7 +274,7 @@ class DadosAlocacao:
         Retorna uma tabela com o  PL de crédito privado de cada emissor em cada fundo, porém apenas contabilizando os ativos que tem data de vencimento igual ou maior que o especificado.
         """
         self.__verifica_dados_atualizados()
-        return self.__ler_csv (f"tabelascar_L_anos{anos_vencimentos}.csv")
+        return self.__ler_csv(f"tabelascar_L_anos{anos_vencimentos}.csv")
 
     def get_info_rating_ativos(self)->pd.DataFrame | None:
         """

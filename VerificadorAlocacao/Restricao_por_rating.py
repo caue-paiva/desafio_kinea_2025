@@ -190,7 +190,6 @@ def verificacao_l_anos(linha_tabela_car:pd.DataFrame,vencimento_em_anos:int)->fl
 def df_com_pl_total_e_por_rating(classe_dados:DadosAlocacao,rating:str)->pd.DataFrame:
     df_pl_total = dados.get_pl_total_fundos()
     df_pl_rating = dados.get_pl_fundo_por_rating(rating)
-    #df_pl_por_emissor = dados.get_pl_e_rating_por_emissor()
     df_pl_rating = df_pl_rating.rename({"total_credito":"pl_credito_privado_rating"},axis=1)
     return df_pl_total.merge(df_pl_rating,how="inner",left_on="TradingDesk",right_on="TradingDesk")
 
@@ -201,18 +200,24 @@ def verificacao_emissor_e_l_anos(
     ratings_igual_ou_abaixo_emissor:dict,
     vencimento_em_anos:int,
     tabela_car_fundo:pd.DataFrame,
-    df_pl_por_emissor:pd.DataFrame
 ):
+    df_pl_por_emissor = dados.get_pl_e_rating_por_emissor() #df do pl de cada emissor num fundo
+    df_pl_emissor_l_anos = dados.get_pl_por_emissor_e_vencimento_anos(vencimento_em_anos)
+    print(type(df_pl_emissor_l_anos))
+    display(df_pl_emissor_l_anos)
+
     linha_tabela_car:pd.DataFrame = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_ou_abaixo_emissor.keys()))] #filtra tabelacar pelos ratings do emissor
     
     porcentagem_max_pelo_ano:float = verificacao_l_anos(linha_tabela_car,vencimento_em_anos) #porcentagem maximo do PL de um fundo por emissor
-    porcentagem_max_pelo_emissor:float = linha_tabela_car["MaxEmissor"].values[0]
+    porcentagem_max_pelo_emissor:float = linha_tabela_car["MaxEmissor"].values[0] #porcentagem maximo do pl de um fundo composta por ativos desse emissor com vencimento igual ou maior a L anos
 
     print(f"porcentagens maximas pelo emissor: {porcentagem_max_pelo_emissor} e pelo ano: {porcentagem_max_pelo_ano}")
 
     pl_emissor_no_fundo:float = df_pl_por_emissor[(df_pl_por_emissor["Emissor"] ==  emissor_nome) & (df_pl_por_emissor["TradingDesk"] == fundo)]["pl_emissor"].values[0] #valor liquido que o emissor tem naquele fundo para todos os ativos
-    
-    print(porcentagem_pelo_ano)
+    pl_emissor_l_anos_fundo:float = df_pl_emissor_l_anos[(df_pl_emissor_l_anos["Emissor"] ==  emissor_nome) & (df_pl_emissor_l_anos["TradingDesk"] == fundo)]["pl_emissor"]
+    print(pl_emissor_l_anos_fundo)
+
+    print(f"Pl total do emissor no fundo: {pl_emissor_no_fundo}, pl do emissor contando apenas ativos com vencimento de {vencimento_em_anos} anos ou mais: {pl_emissor_l_anos_fundo}")
 
 df_pls = df_com_pl_total_e_por_rating(dados,"Aaa")
 
@@ -263,7 +268,7 @@ vencimento_anos_ativo:int = int(df_ativo_filtrado["ExpiracaoAnos"].values[0])
 print(vencimento_anos_ativo)
 
 #dataframes gerais que serão usados em todos os fundos
-df_pl_por_emissor = dados.get_pl_e_rating_por_emissor()
+
 
 for fundo in df_regua_fundo_valor["fundo"]:
     tabela_car_fundo = spark.sql(f"select * from {mapeamento_fundos_tabela_car[dict_fundos_tipoCAR[fundo]]}").toPandas()
@@ -276,8 +281,9 @@ for fundo in df_regua_fundo_valor["fundo"]:
   
     # Linha referente ao rating do ativo específico e a tabela car referente ao fundo
     linha_tabela_car:pd.DataFrame = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_abaixo.keys()))] #df de uma linha
-    porcentagem_pelo_ano:float = verificacao_l_anos(linha_tabela_car,vencimento_anos_ativo) #porcentagem maximo do PL de um fundo por emissor
-    display(linha_tabela_car)
+    
+    #porcentagem_pelo_ano:float = verificacao_l_anos(linha_tabela_car,vencimento_anos_ativo) #porcentagem maximo do PL de um fundo por emissor
+    #display(linha_tabela_car)
     
     # Pega o maior rating da linha da tabela car relacionada ao ativo. Ex: rating_ativo = Baa3, linha = "Baa1 a Baa4" ->
     # Retornará Baa1. Será utilizado para pegar dos CSV's já salvos com a soma do position de todos os ativos abaixo de Baa1.
@@ -298,7 +304,12 @@ for fundo in df_regua_fundo_valor["fundo"]:
                             ["porcentagem_pl"].values[0])
     #print(fundo_porcentagem_pl_cred_priv)
 
-    pl_emissor_no_fundo:float = df_pl_por_emissor[(df_pl_por_emissor["Emissor"] ==  emissor_nome) & (df_pl_por_emissor["TradingDesk"] == fundo)]["pl_emissor"].values[0] #valor liquido que o emissor tem naquele fundo para todos os ativos
+    
+    verificacao_emissor_e_l_anos(
+        emissor_nome,fundo,ratings_igual_abaixo_emissor,vencimento_anos_ativo,tabela_car_fundo
+    )
+    
+    # pl_emissor_no_fundo:float = df_pl_por_emissor[(df_pl_por_emissor["Emissor"] ==  emissor_nome) & (df_pl_por_emissor["TradingDesk"] == fundo)]["pl_emissor"].values[0] #valor liquido que o emissor tem naquele fundo para todos os ativos
 
     # Variável fundo_porcentagem_pl_cred_priv poderá fazer a validação relacionada ao maxPL da tabela car da variável tabela_car_fundo
     # Variável pl_emissor_no_fundo poderá fazer a validação relacionada ao maxEmissor na da tabela car da variável tabela_car_fundo
