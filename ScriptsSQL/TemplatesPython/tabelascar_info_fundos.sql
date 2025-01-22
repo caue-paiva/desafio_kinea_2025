@@ -61,7 +61,7 @@ tab_fundos AS (
 
 
 
-SELECT  t1.TradingDesk, SUM(Position) as total_credito FROM tab_fundos as t1 --soma e acha o total de crédito privado de cada fundo
+SELECT  t1.TradingDesk, SUM(Position) as total_credito_rating FROM tab_fundos as t1 --soma e acha o total de crédito privado de cada fundo
 JOIN --join na tabela de data mais recente, filtrando a tabela para as combinações de cada fundo - ativo mais recentes
 (
   -- acha a data mais recente para cada combinação fundo e ativo

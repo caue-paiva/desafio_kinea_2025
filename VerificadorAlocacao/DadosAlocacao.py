@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from pyspark.sql import DataFrame
+from databricks.sdk.runtime import *
 from dataclasses import dataclass
 import pandas as pd
 import math
@@ -129,7 +130,7 @@ class DadosAlocacao:
         "tabelascar_info_ativos": timedelta(days=1),
         "PL_total_fundo": timedelta(days=1),
         "PL_credito_privado_por_fundo": timedelta(days=1),
-        "mapa_tabelacar": timedelta(weeks=1),
+        "mapa_tabelacar": timedelta(weeks=4),
     }
     __MAPA_TABELAS_METODOS:dict = {
         "tabelascar_pl_emissores": __QUERIES.tabelascar_pl_emissor,
@@ -295,6 +296,23 @@ class DadosAlocacao:
         """
         self.__verifica_dados_atualizados()
         return self.__ler_csv("PL_credito_privado_por_fundo.csv")
+    
+
+    def get_pl_total_e_credito_privado(self) -> pd.DataFrame | None:
+        """
+        Retorna um DF com o PL total e pl de crédito privado de cada fundo
+        """
+        self.__verifica_dados_atualizados()
+        df1 = self.get_pl_credito_privado_fundos()
+        df2 = self.get_pl_total_fundos()
+        
+    
+    def get_mapa_tabelacar(self) -> pd.DataFrame | None:
+        """
+        Retorna um DF com o mapeamento de cada fundo para a sua tabelacar correspondente
+        """
+        self.__verifica_dados_atualizados()
+        return self.__ler_csv("mapa_tabelacar.csv")
 
 
 dados = DadosAlocacao()
