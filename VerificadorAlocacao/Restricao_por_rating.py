@@ -58,27 +58,6 @@ def get_ratings_igual_abaixo(rating:str, tabela_car_fundo:str)->list[str]:
 
 # COMMAND ----------
 
-mapeamento_fundos_tabela_car = {
-          'CAR Baixo Risco':            'desafio_kinea.boletagem_cp.tabelacar_baixorisco',
-          'CAR Médio Risco':            'desafio_kinea.boletagem_cp.tabelacar_mediorisco', 
-          'CAR Fundos Hibridos':        'desafio_kinea.boletagem_cp.tabelacar_hibridos',
-          'Dedicado Alto Risco':        'desafio_kinea.boletagem_cp.tabelacar_dedicadoaltorisco',
-          'CAR Fundos HY':              'desafio_kinea.boletagem_cp.tabelacar_hy',
-          'CAR Fundos Mistos':          'desafio_kinea.boletagem_cp.tabelacar_criinfra',
-          'Dedicado CapitalSolutions':  'desafio_kinea.boletagem_cp.tabelacar_capitalsolutions'
-}
-
-# TODO: Generalizar para pegar da tabela desafio_kinea.boletagem_cp.fundostipocar
-# quando recebermos a régua com todos os fundos | alocacao
-# Por enquanto, somente utilizando uma lista de fundos para teste
-
-# FUNDO 389 não tem na tabela dos fundos que apareceram em desafio_kinea.boletagem_cp.fundostipocar
-# lista_fundos = ["KAT", "ID2", "FRA", "APP", "PAL", "652", "PDA", "APO", "PID", "678", "KRF", "KCP", "BVP", "RFA", "KOP", "134", "CPI", "846", "IRF"]
-
-
-
-# COMMAND ----------
-
 from typing import List
 
 # O objetivo dessa query é ditar qual a porcentagem do PL de certo fundo é composto por ativos de crédito privado de até certo rating, de acordo com a lógica das tabelas CAR
@@ -178,23 +157,25 @@ ON pl_total_fundo.Codigo = tabela_emissor.TradingDesk"""
 
 from DadosAlocacao import DadosAlocacao
 
-
 dados = DadosAlocacao()
 
 df_pl_por_emissor = dados.get_pl_e_rating_por_emissor()
 display(df_pl_por_emissor)
-#print(df_pl_por_emissor.info())
 
 # COMMAND ----------
 
-#Pegar a régua que foi dada pelo João
+mapeamento_fundos_tabela_car = {
+          'CAR Baixo Risco':            'desafio_kinea.boletagem_cp.tabelacar_baixorisco',
+          'CAR Médio Risco':            'desafio_kinea.boletagem_cp.tabelacar_mediorisco', 
+          'CAR Fundos Hibridos':        'desafio_kinea.boletagem_cp.tabelacar_hibridos',
+          'Dedicado Alto Risco':        'desafio_kinea.boletagem_cp.tabelacar_dedicadoaltorisco',
+          'CAR Fundos HY':              'desafio_kinea.boletagem_cp.tabelacar_hy',
+          'CAR Fundos Mistos':          'desafio_kinea.boletagem_cp.tabelacar_criinfra',
+          'Dedicado CapitalSolutions':  'desafio_kinea.boletagem_cp.tabelacar_capitalsolutions'
+}
 
-# df de [Fundo | alocacao], código do fundo
-# ["KAT", "ID2", "FRA", "APP", "PAL", "652", "PDA", "APO", "PID", "678", "KRF", "KCP", "BVP", "RFA", "KOP", "134", "CPI", "846", "IRF"]
+# COMMAND ----------
 
-# TODO Comentar e melhorar código
-
-# TODO Integrar com as tabelas CSV implementadas
 
 # TODO Integrar com o que o João fez 
 ativo = 'ENMTA4'
@@ -207,22 +188,18 @@ fundo_dist_regua = {
 }
 df_regua_fundo_valor = pd.DataFrame(fundo_dist_regua)
 
-#Buscar qual é o rating do fundo | RatingOp
-
-df_ativos = dados.get_info_rating_ativos() #df com informações sobre cada ativo,ratings e emissores
-display(df_ativos)
-
-rating_ativo = df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0] #pegar dados sobre o ativo,seus rating, o seu emissor e rating do emissor
-rating_emissor = df_ativos[df_ativos["Ativo"] == ativo]["RatingGrupo"].values[0]
-emissor_nome:str = df_ativos[df_ativos["Ativo"] == ativo]["Emissor"].values[0]
-
-print(rating_emissor,emissor_nome)
-
+# dict_fundos_tipoCAR contém um dicionário da forma "codigo_fundo": "Tipo Tabela Car"; 
+# Ex: {'RFA': 'CAR Fundos Hibridos', 'APO': 'CAR Fundos Hibridos', 'ID2': 'CAR Fundos Hibridos'}
 dict_fundos_tipoCAR = {}
 for fundo in fundo_dist_regua["fundo"]:
     dict_fundos_tipoCAR[fundo] = spark.sql(f"SELECT DISTINCT TipoCAR FROM desafio_kinea.boletagem_cp.fundostipocar WHERE Fundo = '{fundo}'").collect()[0][0]
 
-print(dict_fundos_tipoCAR)
+df_ativos = dados.get_info_rating_ativos() #df com informações sobre cada ativo,ratings e emissores
+
+#Pegar dados sobre o ativo,seus rating, o seu emissor e rating do emissor
+rating_ativo = df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0] 
+rating_emissor = df_ativos[df_ativos["Ativo"] == ativo]["RatingGrupo"].values[0]
+emissor_nome:str = df_ativos[df_ativos["Ativo"] == ativo]["Emissor"].values[0]
 
 for fundo in df_regua_fundo_valor["fundo"]:
     tabela_car_fundo = spark.sql(f"select * from {mapeamento_fundos_tabela_car[dict_fundos_tipoCAR[fundo]]}").toPandas()
@@ -230,38 +207,32 @@ for fundo in df_regua_fundo_valor["fundo"]:
     ratings_igual_abaixo = get_ratings_igual_abaixo(df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0],
                                                     mapeamento_fundos_tabela_car[dict_fundos_tipoCAR[fundo]])
     
-    print(ratings_igual_abaixo)
-    
-    ratings = []
-    for key,val in ratings_igual_abaixo.items():
-        for rating in val:
-            ratings.append(rating)
-            
     # Linha referente ao rating do ativo específico e a tabela car referente ao fundo
     linha_tabela_car = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_abaixo.keys()))]
+    
+    # Pega o maior rating da linha da tabela car relacionada ao ativo. Ex: rating_ativo = Baa3, linha = "Baa1 a Baa4" ->
+    # Retornará Baa1. Será utilizado para pegar dos CSV's já salvos com a soma do position de todos os ativos abaixo de Baa1.
+    # Caso seja apenas Baa3 no campo de rating da linha da tabela car, será pego o CSV relacionado à esse rating + os ativos abaixo 
 
-    display(linha_tabela_car)
+    # TODO TODO TODO TODO !!!!!Pedir para o Rapha mudar nome da coluna p/ IntervaloRating para Tabela Car "Fundos Hibridos"!!!!!!
+    maior_rating_linha_tabela_car = linha_tabela_car["RatingKinea"].values[0].split(" ")[0] 
+    fundo_pl_cred_priv_pl_total = dados.get_pl_fundo_por_rating(maior_rating_linha_tabela_car)
 
-    fundo_sum_position_pl_total = query_fundo_sum_position(ratings).toPandas()
+    # Aparentemente a query foi atualizada, mas não rodou o script de atualizar os CSVs. Provavelmente vai funcionar pegar a coluna de pl_credito_privado da variável fundo_pl_cred_priv_pl_total se atualizar. 
+    display(fundo_pl_cred_priv_pl_total)
 
-    display(fundo_sum_position_pl_total)
+    fundo_pl_cred_priv_pl_total["porcentagem_pl"] = (fundo_pl_cred_priv_pl_total["pl_credito_privado"] /
+                                                     fundo_pl_cred_priv_pl_total["pl_total"])
 
-    fundo_sum_position_pl_total["porcentagem_pl"] = fundo_sum_position_pl_total["pl_credito_privado"] / fundo_sum_position_pl_total["pl_total"]
-
-    fundo_porcentagem_pl = fundo_sum_position_pl_total[fundo_sum_position_pl_total["TradingDesk"] == fundo]["porcentagem_pl"].values[0]
-
-
+    fundo_porcentagem_pl_cred_priv = (fundo_pl_cred_priv_pl_total[fundo_pl_cred_priv_pl_total["TradingDesk"] == fundo]
+                            ["porcentagem_pl"].values[0])
+    
     pl_emissor_no_fundo:float = df_pl_por_emissor[(df_pl_por_emissor["Emissor"] ==  emissor_nome) & (df_pl_por_emissor["TradingDesk"] == fundo)]["pl_emissor"].values[0]
-    print(pl_emissor_no_fundo)
-    # Verificação como stub
-    # if fundo_porcentagem_pl > tabela_car_max_pl:
-    #     # TODO se entrar, deve fazer a construção do DF de realocação.
-    #     print("entrou aqui")
-    # else:
-    #     # Printando a porcetagem à titulo de curiosidade
-    #     print(fundo, fundo_porcentagem_pl)
-    #     print(fundo, tabela_car_max_pl)
-    #     print("eh isto aí")
+
+    # Variável fundo_porcentagem_pl_cred_priv poderá fazer a validação relacionada ao maxPL da tabela car da variável tabela_car_fundo
+    # Variável pl_emissor_no_fundo poderá fazer a validação relacionada ao maxEmissor na da tabela car da variável tabela_car_fundo
+    # TODO: Fazer validação se há as colunas de anos, e fazer a validação deles, caso seja válido. (Não lembro se era para substituir a validação de maxPL ou maxEmissor por essa de anos, ou se é uma validação à parte).
+    # TODO: Gerar o output da forma que Sarah e João querem (fundo | excedente) (será em porcentagem? será que não deveriamos estar fazendo por quantidade de cotas excedentes? ou pela quantidade de PL excedente?) 
 
 
 # COMMAND ----------
