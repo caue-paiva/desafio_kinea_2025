@@ -198,7 +198,7 @@ def verificacao_emissor_e_l_anos(
     vencimento_em_anos:int,
     tabela_car_fundo:pd.DataFrame,
     debug = False
-):
+)->dict[str,float]:
     df_pl_por_emissor = dados.get_pl_e_rating_por_emissor() #df do pl de cada emissor num fundo
     df_pl_emissor_l_anos = dados.get_pl_por_emissor_e_vencimento_anos(vencimento_em_anos)
 
@@ -227,6 +227,22 @@ def verificacao_emissor_e_l_anos(
         "diferenca_total_emissor": (porcentagem_max_pelo_emissor - porcentagem_real_pemissor) * pl_total_fundo,
     }
 
+def verificacao_max_pl (linha_tabelarcar:pd.Series,fundo:str)->dict[str,float]:
+    # TODO TODO TODO TODO !!!!!Pedir para o Rapha mudar nome da coluna p/ IntervaloRating para Tabela Car "Fundos Hibridos"!!!!!!
+    maior_rating_linha_tabela_car = linha_tabela_car["RatingKinea"].values[0].split(" ")[0]  #acha o maior rating se for um range
+    fundo_pl_cred_priv_pl_total = df_com_pl_total_e_por_rating(dados,maior_rating_linha_tabela_car) #pega PL de credito privado de um fundo  de um fundo filtrado por esse  rating
+    df_pl_fltrado = fundo_pl_cred_priv_pl_total[fundo_pl_cred_priv_pl_total["TradingDesk"] == fundo]  #filtra pelo fundo
+    
+    pl_total:float = df_pl_fltrado["PL"].values[0] #pl total do fundo
+    pl_credito_privado_rating: float = df_pl_fltrado["pl_credito_privado_rating"].values[0] #pl de credito pelo rating
+    porcen_real_credito_privado_rating:float = pl_credito_privado_rating / pl_total
+
+    porcen_max_credito_privado_rating: float = linha_tabela_car["MaxPL"].values[0] #porcentagem maxima permitida pela tabelacar
+    return {
+        "diferenca_porcentagem_pl_rating": porcen_max_credito_privado_rating - porcen_real_credito_privado_rating,
+        "diferenca_total_pl_rating": (porcen_max_credito_privado_rating - porcen_real_credito_privado_rating) * pl_total,
+        "pl_total_fundo": pl_total
+    }
 
 # COMMAND ----------
 
@@ -261,7 +277,6 @@ df_resultado_regua = pd.DataFrame(
 # TODO Integrar com o que o João fez 
 
 ativo = 'ENMTA4'
-
 fundo_dist_regua = {
     'fundo': ['RFA', 'APO', 'ID2'],
     'valor': [sum([0.4753, 0.2623, 0.3275]),
@@ -302,15 +317,14 @@ for fundo in df_regua_fundo_valor["fundo"]:
                                                     mapeamento_fundos_tabela_car[dict_fundos_tipoCAR[fundo]])
   
     # Linha referente ao rating do ativo específico e a tabela car referente ao fundo
-    linha_tabela_car:pd.DataFrame = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_abaixo.keys()))] #df de uma linha
+    linha_tabela_car_ativo:pd.DataFrame = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_abaixo.keys()))] #df de uma linha
     
-    #porcentagem_pelo_ano:float = verificacao_l_anos(linha_tabela_car,vencimento_anos_ativo) #porcentagem maximo do PL de um fundo por emissor
-    #display(linha_tabela_car)
+
     
     # Pega o maior rating da linha da tabela car relacionada ao ativo. Ex: rating_ativo = Baa3, linha = "Baa1 a Baa4" ->
     # Retornará Baa1. Será utilizado para pegar dos CSV's já salvos com a soma do position de todos os ativos abaixo de Baa1.
     # Caso seja apenas Baa3 no campo de rating da linha da tabela car, será pego o CSV relacionado à esse rating + os ativos abaixo 
-
+    """
     # TODO TODO TODO TODO !!!!!Pedir para o Rapha mudar nome da coluna p/ IntervaloRating para Tabela Car "Fundos Hibridos"!!!!!!
     maior_rating_linha_tabela_car = linha_tabela_car["RatingKinea"].values[0].split(" ")[0] 
     fundo_pl_cred_priv_pl_total = df_com_pl_total_e_por_rating(dados,maior_rating_linha_tabela_car) #pega PL de credito privado de um fundo  de um fundo filtrado por esse  rating
@@ -321,15 +335,22 @@ for fundo in df_regua_fundo_valor["fundo"]:
     fundo_pl_cred_priv_pl_total["porcentagem_pl"] = (fundo_pl_cred_priv_pl_total["pl_credito_privado_rating"] /
                                                      fundo_pl_cred_priv_pl_total["PL"])
     
-    fundo_porcentagem_pl_cred_priv:float = (fundo_pl_cred_priv_pl_total[fundo_pl_cred_priv_pl_total["TradingDesk"] == fundo] 
-                            ["porcentagem_pl"].values[0])
+    df_pl_fltrado = fundo_pl_cred_priv_pl_total[fundo_pl_cred_priv_pl_total["TradingDesk"] == fundo]
+    fundo_porcentagem_pl_cred_priv: float = df_pl_fltrado["porcentagem_pl"].values[0]
+    fundo_pl_total:float = df_pl_fltrado["PL"].values[0]
+    fundo_pl_credito_privado_rating:float = df_pl_fltrado["pl_credito_privado_rating"].values[0]
+    """
+
+    resultado_max_pl = verificacao_max_pl(
+        linha_tabela_car_ativo,fundo
+    )
+    pl_total_fundo :float = resultado_max_pl["pl_total_fundo"]
 
     resultado_emissor_e_ano = verificacao_emissor_e_l_anos(
         emissor_nome,fundo,pl_total_fundo,ratings_igual_abaixo_emissor,vencimento_anos_ativo,tabela_car_fundo
     )
     print(resultado_emissor_e_ano)
     
-    # pl_emissor_no_fundo:float = df_pl_por_emissor[(df_pl_por_emissor["Emissor"] ==  emissor_nome) & (df_pl_por_emissor["TradingDesk"] == fundo)]["pl_emissor"].values[0] #valor liquido que o emissor tem naquele fundo para todos os ativos
 
     # Variável fundo_porcentagem_pl_cred_priv poderá fazer a validação relacionada ao maxPL da tabela car da variável tabela_car_fundo
     # Variável pl_emissor_no_fundo poderá fazer a validação relacionada ao maxEmissor na da tabela car da variável tabela_car_fundo
