@@ -60,7 +60,7 @@ def get_ratings_igual_abaixo(rating:str, tabela_car_fundo:str)->list[str]:
 # COMMAND ----------
 
 from typing import List
-
+ 
 # O objetivo dessa query é ditar qual a porcentagem do PL de certo fundo é composto por ativos de crédito privado de até certo rating, de acordo com a lógica das tabelas CAR
 
 def query_fundo_sum_position(ratings:List[str])->pd.DataFrame:
@@ -159,11 +159,10 @@ ON pl_total_fundo.Codigo = tabela_emissor.TradingDesk"""
 from DadosAlocacao import DadosAlocacao
 
 dados = DadosAlocacao()
-
+df_emissor_anos = dados.get_pl_por_emissor_e_vencimento_anos(6)
+display(df_emissor_anos)
 df_pl_total = dados.get_pl_total_fundos()
-#display(df_pl_total)
-df_mapa_tabelacar = dados.get_mapa_tabelacar()
-display(df_mapa_tabelacar)
+
 
 def verificacao_l_anos(linha_tabela_car:pd.DataFrame,vencimento_em_anos:int)->float | None:
     """
@@ -185,14 +184,12 @@ def verificacao_l_anos(linha_tabela_car:pd.DataFrame,vencimento_em_anos:int)->fl
             prev_col = col
     
     return None #não tem coluna de ano 
-    
 
 def df_com_pl_total_e_por_rating(classe_dados:DadosAlocacao,rating:str)->pd.DataFrame:
     df_pl_total = dados.get_pl_total_fundos()
     df_pl_rating = dados.get_pl_fundo_por_rating(rating)
     df_pl_rating = df_pl_rating.rename({"total_credito":"pl_credito_privado_rating"},axis=1)
     return df_pl_total.merge(df_pl_rating,how="inner",left_on="TradingDesk",right_on="TradingDesk")
-
 
 def verificacao_emissor_e_l_anos(
     emissor_nome:str,

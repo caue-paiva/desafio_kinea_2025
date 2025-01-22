@@ -254,6 +254,23 @@ class DadosAlocacao:
         except Exception as e:
             print(f"Falha ao ler o arquivo: {path}/{nome_tabela}. Erro: {e}")
             return None
+        
+    
+    def _pl_emissor_vencimento_ano_aux(self,anos_vencimentos:int)->pd.DataFrame | None:
+        """
+        Objetivo: A query em SQL de pegar o PL de um emissor filtrado pelos anos de vencimento. de ativos tem o problema de excluir algumas combinações de emissores e fundos por eles terem 0 de pl (nenhum ativo) que satisfaz o filtro.
+        Esse método faz a query sem filtro, acha as combinações única que estão faltando e dá append no dataframe delas com soma de PL 0
+        """
+
+        df_sem_filtro = self.get_pl_e_rating_por_emissor()
+        if df_sem_filtro is None:
+            return None
+        df_sem_filtro = df_sem_filtro[ ["Emissor","TradingDesk","RatingGrupo","PL"] ] #pega apenas todas as colunas menos o PL filtrado de cada emissor
+        df_filtrado = self.__ler_csv(f"tabelascar_L_anos{anos_vencimentos}.csv") #df filtrado
+        df_join = df_sem_filtro.merge(df_filtrado,how="left",on=["Emissor","TradingDesk","RatingGrupo","PL"]) #left join, trazendo todas as combinações possíveis de Emissor e Trading desk
+        df_join = df_join.fillna(0) #valores nulos viram 0
+
+        return df_join
 
     def get_pl_e_rating_por_emissor(self)->pd.DataFrame | None:
         """
@@ -274,7 +291,7 @@ class DadosAlocacao:
         Retorna uma tabela com o  PL de crédito privado de cada emissor em cada fundo, porém apenas contabilizando os ativos que tem data de vencimento igual ou maior que o especificado.
         """
         self.__verifica_dados_atualizados()
-        return self.__ler_csv(f"tabelascar_L_anos{anos_vencimentos}.csv")
+        return self._pl_emissor_vencimento_ano_aux(anos_vencimentos) #função auxiliar com lógica extra para lidar com valores que faltam com a filtragem
 
     def get_info_rating_ativos(self)->pd.DataFrame | None:
         """
@@ -315,4 +332,7 @@ class DadosAlocacao:
         return self.__ler_csv("mapa_tabelacar.csv")
 
 
-dados = DadosAlocacao()
+if __name__ == "__main__":
+    dados = DadosAlocacao()
+    df = dados.get_pl_por_emissor_e_vencimento_anos(6)
+    display(df)
