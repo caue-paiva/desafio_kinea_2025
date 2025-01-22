@@ -11,6 +11,8 @@ from typing import List,Callable
 import matplotlib.pyplot as plt
 import seaborn as sns
 import time
+import numpy as np
+import scipy
 
 
 # COMMAND ----------
@@ -159,6 +161,7 @@ def redistribuir(regua_macro:pd.DataFrame,restritos:pd.DataFrame) -> pd.DataFram
 
 # COMMAND ----------
 
+# DBTITLE 1,Extrair Informações
 #Extraindo Informações Necessárias
 dataframes = extrair_informacoes()
 
@@ -205,6 +208,48 @@ def solucao(ativo:str,checagens: List[Callable],ordens: pd.DataFrame,informacoes
    
 teste = solucao('INDIGO FIAGRO DCA EMISSAO 1 SERIE 1 SENIOR',[],pd.DataFrame(),dataframes)
 print(teste)
+
+# COMMAND ----------
+
+# DBTITLE 1,Testando Constraints
+#Testes DataFrame exemplo com Restrições
+regua_ideal = teste
+
+#Inicia uma Régua com os valores distribuidos uniformemente entre os fundos
+regua_possivel = pd.DataFrame({'fundo':regua_ideal['fundo'],'percentual_alocacao': [1/len(regua_ideal)] * len(regua_ideal)})
+
+#Criando a variável inicial para o otimizado
+x0 = regua_possivel['percentual_alocacao'].values
+
+#Função Objetivo -> Soma dos Módulos das diferenças entre a Régua Ideal e a Régua Possível
+def objetivo(x, ri):
+    return np.abs(x - ri['percentual_alocacao']).sum()
+
+#Contraints Iniciais
+constraints=[
+    {'type': 'eq', 'fun': lambda x: sum(x) - 1} #A soma dos valores da régua tem que ser igual a um
+]
+
+#Criar Constrains a partir do DataFrame vindo do Cauê e Cícero
+dataframe_exemplo = 
+
+#Resolver o problema de minimização
+resultado = scipy.optimize.minimize(
+    fun=objetivo,
+    x0=x0,
+    args=(regua_ideal),
+    constraints=constraints,
+    method='SLSQP',
+    options={'disp': True}
+)['x']
+
+# COMMAND ----------
+
+print(sum(resultado))
+
+# COMMAND ----------
+
+print(regua_ideal['percentual_alocacao'] - resultado)
 
 # COMMAND ----------
 
