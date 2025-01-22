@@ -163,7 +163,7 @@ def redistribuir(regua_macro:pd.DataFrame,restritos:pd.DataFrame) -> pd.DataFram
 
 # DBTITLE 1,Extrair Informações
 #Extraindo Informações Necessárias
-dataframes = extrair_informacoes()
+dataframes = extrair_informacoes() #Podemos melhorar quais informações devemos fazer query e quais não
 
 # COMMAND ----------
 
@@ -207,106 +207,53 @@ def solucao(ativo:str,checagens: List[Callable],ordens: pd.DataFrame,informacoes
     return regua
    
 regua_ideal = solucao('INDIGO FIAGRO DCA EMISSAO 1 SERIE 1 SENIOR',[],pd.DataFrame(),dataframes)
+print(regua_ideal)
 
 # COMMAND ----------
 
-# DBTITLE 1,Testando Constraints
-#Inicia uma Régua com os valores distribuidos uniformemente entre os fundos
-regua_possivel = pd.DataFrame({'fundo':regua_ideal['fundo'],'percentual_alocacao': [1/len(regua_ideal)] * len(regua_ideal)})
+# DBTITLE 1,Receber Dataframe do Cicero e Caue
+diferencas = pd.DataFrame(columns=['fundo','diferenca_total_ano','diferenca_total_emissor','diferenca_total_pl_privado','valor_alocacao_inicial'])
 
-#Criando a variável inicial para o otimizado
-x0 = regua_possivel['percentual_alocacao'].values
+# COMMAND ----------
+
+# DBTITLE 1,Otimizar
+#Inicia uma Régua com os valores distribuidos uniformemente entre os fundos
+x0 = np.array([1/len(regua_ideal)] * len(regua_ideal))
 
 #Função Objetivo -> Soma dos Módulos das diferenças entre a Régua Ideal e a Régua Possível
-def objetivo(x, ri):
-    return np.abs(x - ri['percentual_alocacao']).sum()
+def objetivo(x, regua_ideal):
+    return np.power(x - regua_ideal['percentual_alocacao'], 2).sum()
 
 #Contraints Iniciais
-constraints_0=[
-    {'type': 'eq', 'fun': lambda x: sum(x) - 1} #A soma dos valores da régua tem que ser igual a um
+constraints=[
+   {'type': 'eq', 'fun': lambda x: sum(x) - 1} #A soma dos valores da régua tem que ser igual a um
 ]
-for i in range(len(regua_possivel)):
-    constraints_0.append({'type': 'ineq', 'fun': lambda x: x[i]})
+for i in range(len(x0)):
+    constraints.append({'type': 'ineq', 'fun': lambda x: x[i]}) #Todos os valores de x tem que ser maiores que 0
 
-#Exemplo de Retorno do Cauê e Cícero
-#Duvida -> Por que colunas em porcentagem e totais?
-def criar_valores_limites(regua_ideal):
-    limites = pd.DataFrame(columns=[ 
-        "fundo","valor_alocacao_inicial",
-        "diferenca_total_ano",
-        "diferenca_total_emissor",
-        "diferenca_total_pl_privado", 
-        "passou_l_anos",
-        "passou_max_emissor",
-        "passou_max_pl",
-        "passou_em_tudo",])
-    limites['fundo'] = regua_ideal['fundo']
-    limites['valor_alocacao_inicial'] = regua_ideal['percentual_alocacao']
-    limites['diferenca_total_ano'] = np.round(np.random.uniform(-0.1, 0.1, 6), 4)
-    limites['diferenca_total_emissor'] = np.round(np.random.uniform(-0.1, 0.1, 6), 4)
-    limites['diferenca_total_pl_privado'] = np.round(np.random.uniform(-0.1, 0.1, 6), 4)
-
-    # Atribuindo valores às colunas "passou" com base nas diferenças
-    limites['passou_l_anos'] = limites['diferenca_total_ano'] <= 0
-    limites['passou_max_emissor'] = limites['diferenca_total_emissor'] <= 0
-    limites['passou_max_pl'] = limites['diferenca_total_pl_privado'] <= 0
-
-    # A coluna "passou_em_tudo" é True se todas as outras "passou" forem True
-    limites['passou_em_tudo'] = limites['passou_l_anos'] & limites['passou_max_emissor'] & limites['passou_max_pl']
-
-    # Ajustando as diferenças negativas para serem menores que o valor de alocação inicial
-    for col in ['diferenca_total_ano', 'diferenca_total_emissor', 'diferenca_total_pl_privado']:
-        limites[col] = [
-            np.random.uniform(-aloc, 0) if diff < 0 else diff
-            for aloc, diff in zip(limites['valor_alocacao_inicial'], limites[col])
-        ]
-
-    # Recalculando as colunas de tipo "passou"
-    limites['passou_l_anos'] = limites['diferenca_total_ano'] <= 0
-    limites['passou_max_emissor'] = limites['diferenca_total_emissor'] <= 0
-    limites['passou_max_pl'] = limites['diferenca_total_pl_privado'] <= 0
-    limites['passou_em_tudo'] = limites['passou_l_anos'] & limites['passou_max_emissor'] & limites['passou_max_pl']
-    return limites
-limites = criar_valores_limites(regua_ideal)
-
-
-#Criando função para transformar diferenças em Constraints
-def criar_constraints(limites,constraints):
-    contador = 0
-    for index,row in limites.iterrows():
-        for col in ['diferenca_total_ano', 'diferenca_total_emissor', 'diferenca_total_pl_privado']:
-            if row[col] < 0:
-                constraints.append({'type': 'ineq', 'fun': lambda x: x[contador] - (row[col]-row['valor_alocacao_inicial'])})
-            else:
-                constraints.append({'type': 'ineq', 'fun': lambda x: x[contador] - (row[col]+row['valor_alocacao_inicial'])})
-    return constraints
-constraints = criar_constraints(limites,constraints_0)
+#Transformar Diferenças em Constraints
+limites = {}
+diferencas = diferencas.reset_index(drop=True)
+for index,row in diferencas.iterrows():
+    limite_fundo = []
+    for col in ['diferenca_total_ano', 'diferenca_total_emissor', 'diferenca_total_pl_privado']:     
+        limite = row['valor_alocacao_inicial']+ row[col]
+        constraints.append({'type': 'ineq', 'fun': lambda x,i = index,l = limite: l-x[i]})
+        limite_fundo.append(limite)
+    limites[row['fundo']] = limite_fundo
 
 #Resolver o problema de minimização
-resultado = scipy.optimize.minimize(
+minimizador = scipy.optimize.minimize(
     fun=objetivo,
     x0=x0,
     args=(regua_ideal),
     constraints=constraints,
     method='SLSQP',
-    options={'disp': True}
-)['x']
+    options={'disp':False}
+)    
+erro = minimizador.fun
+regua_otimizada = minimizador.x
 
-# COMMAND ----------
-
-print(sum(resultado))
-
-# COMMAND ----------
-
-print(resultado)
-
-# COMMAND ----------
-
-print(regua)
-
-# COMMAND ----------
-
-print(regua_ideal['percentual_alocacao'] - resultado)
 
 # COMMAND ----------
 
