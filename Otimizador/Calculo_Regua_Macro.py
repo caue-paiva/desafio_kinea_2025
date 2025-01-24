@@ -1,11 +1,3 @@
-# Databricks notebook source
-# MAGIC %md
-# MAGIC ## [Link para documento overleaf](https://www.overleaf.com/project/677fe7fd4bf7cc5092992e57) 
-
-# COMMAND ----------
-
-# DBTITLE 1,Importando Bibliotecas
-#Bibliotecas
 import pandas as pd
 from typing import List,Callable
 import matplotlib.pyplot as plt
@@ -14,10 +6,7 @@ import time
 import numpy as np
 import scipy
 
-
-# COMMAND ----------
-
-# DBTITLE 1,Funções Intermédiarias
+#Funções Auxiliares
 #Funções Intermédiarias da Função Principal
 def query(arquivo:str) -> pd.DataFrame:
     caminho_base = "/Workspace/Users/joaopedroalexandrino6@hotmail.com/desafio_kinea_2025/ScriptsSQL"
@@ -157,24 +146,13 @@ def redistribuir(regua_macro:pd.DataFrame,restritos:pd.DataFrame) -> pd.DataFram
     regua_macro['percentual_alocacao'] = fundos_nao_restritos['percentual_alocacao'] + excedente_distribuido
     return regua_macro
 
+dataframes = extrair_informacoes()
 
 
-# COMMAND ----------
-
-# DBTITLE 1,Extrair Informações
-#Extraindo Informações Necessárias
-dataframes = extrair_informacoes() #Podemos melhorar quais informações devemos fazer query e quais não
-
-# COMMAND ----------
-
-# DBTITLE 1,Função Principal
-#Cálculo Régua Macro
-def regua_macro(ativo:str,checagens: List[Callable],ordens: pd.DataFrame,informacoes: List[pd.DataFrame]) -> pd.DataFrame:
+def regua_macro(ativo:str) -> pd.DataFrame:
     '''
     Função principal que recebe como input:
-    1. checagens: Lista de funções geradas pelo ChatGPT
-    2. ordens: DataFrame ['Ticker','Amount','Price'] representando uma grupo de ordens a serem boletadas
-    e retorna:
+    1. ativo 
     1. ordens_final: DatFrame ['Ticker','Amount','Price','Fundo'] representando quanto irá para cada fundo
     '''
     #Essas  etapas são para 1 ordem -> 1 linha do dataframe ordens
@@ -191,7 +169,7 @@ def regua_macro(ativo:str,checagens: List[Callable],ordens: pd.DataFrame,informa
     book_macro = encontrar_book_macro(book_ativo)
 
     #Calcular a Régua Book Macro 
-    regua_macro = calculo_regua_macro(dataframes[0],dataframes[1],credito_aportado['alocado'].sum())
+    regua_macro = calculo_regua_macro(inf_fundos,peso_books,credito_aportado['alocado'].sum())
    
     #Filtrar Régua pelo Book do Ativo
     regua_macro = regua_macro[regua_macro['book'] == book_macro]
@@ -206,78 +184,4 @@ def regua_macro(ativo:str,checagens: List[Callable],ordens: pd.DataFrame,informa
     #Retornar Regua
     return regua
    
-regua_ideal = solucao('INDIGO FIAGRO DCA EMISSAO 1 SERIE 1 SENIOR',[],pd.DataFrame(),dataframes)
-print(regua_ideal)
 
-# COMMAND ----------
-
-# DBTITLE 1,Receber Dataframe do Cicero e Caue
-diferencas = pd.DataFrame(columns=['fundo','diferenca_total_ano','diferenca_total_emissor','diferenca_total_pl_privado','valor_alocacao_inicial'])
-
-# COMMAND ----------
-
-# DBTITLE 1,Otimizar
-#Inicia uma Régua com os valores distribuidos uniformemente entre os fundos
-x0 = np.array([1/len(regua_ideal)] * len(regua_ideal))
-
-#Função Objetivo -> Soma dos Módulos das diferenças entre a Régua Ideal e a Régua Possível
-def objetivo(x, regua_ideal):
-    return np.power(x - regua_ideal['percentual_alocacao'], 2).sum()
-
-#Contraints Iniciais
-constraints=[
-   {'type': 'eq', 'fun': lambda x: sum(x) - 1} #A soma dos valores da régua tem que ser igual a um
-]
-for i in range(len(x0)):
-    constraints.append({'type': 'ineq', 'fun': lambda x: x[i]}) #Todos os valores de x tem que ser maiores que 0
-
-#Transformar Diferenças em Constraints
-limites = {}
-diferencas = diferencas.reset_index(drop=True)
-for index,row in diferencas.iterrows():
-    limite_fundo = []
-    for col in ['diferenca_total_ano', 'diferenca_total_emissor', 'diferenca_total_pl_privado']:     
-        limite = row['valor_alocacao_inicial']+ row[col]
-        constraints.append({'type': 'ineq', 'fun': lambda x,i = index,l = limite: l-x[i]})
-        limite_fundo.append(limite)
-    limites[row['fundo']] = limite_fundo
-
-#Resolver o problema de minimização
-minimizador = scipy.optimize.minimize(
-    fun=objetivo,
-    x0=x0,
-    args=(regua_ideal),
-    constraints=constraints,
-    method='SLSQP',
-    options={'disp':False}
-)    
-erro = minimizador.fun
-regua_otimizada = minimizador.x
-
-
-# COMMAND ----------
-
-# DBTITLE 1,Testes Cálculo Régua
-#Teste Cálculo Régua - Exemplo feito pelo Ali na Reunião do dia 09/01/2025 (https://drive.google.com/file/d/1O-bVrF1At0xZNQIGmIOQ1Oi7YiSkGD0u/view?usp=sharing)
-#Apenas um teste não precisa rodas
-''''credito_total = 40
-teste_inf_fundos = pd.DataFrame({
-        'fundo':['RFA','APO','ID2'],
-        'PL':[100,50,70],
-        'l_min':[0.1,0.1,0.1],
-        'l_max':[0.2,0.2,0.4]
-})
-teste_books_fundos  = pd.DataFrame({
-        'fundo':['RFA','RFA','RFA','APO','APO','APO','ID2','ID2','ID2'],
-        'book':['HG','MY','HY','HG','MY','HY','HG','MY','HY'],
-        'peso_book':[0.53778,0.1634,0.29882,0.23006,0.433212,0.336729,0.41028,0.20813,0.38159]
-})
-resposta_nossa = calculo_regua(teste_inf_fundos,teste_books_fundos,credito_total)
-resposta_ali = pd.DataFrame({
-        'fundo':['RFA','RFA','RFA','APO','APO','APO','ID2','ID2','ID2'],
-        'book':['HG','MY','HY','HG','MY','HY','HG','MY','HY'],
-        'dist_regua':[0.4753,0.2623,0.3275,0.1017,0.3478,0.1845,0.4230,0.3899,0.4879]
-        
-})
-print(resposta_nossa['percentual_alocacao'])
-print(resposta_ali['dist_regua'])''''
