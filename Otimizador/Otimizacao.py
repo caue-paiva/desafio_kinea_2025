@@ -1,3 +1,11 @@
+import numpy as np
+import scipy
+import pandas as pd
+
+#Pegar inputs
+regua_ideal = ''
+diferencas = ''
+
 #Inicia uma Régua com os valores distribuidos uniformemente entre os fundos
 x0 = np.array([1/len(regua_ideal)] * len(regua_ideal))
 
@@ -12,9 +20,14 @@ constraints=[
 for i in range(len(x0)):
     constraints.append({'type': 'ineq', 'fun': lambda x: x[i]}) #Todos os valores de x tem que ser maiores que 0
 
+#Tratar Dataframe de Diferenças
+
 #Transformar Diferenças em Constraints
 limites = {}
 diferencas = diferencas.reset_index(drop=True)
+colunas_valores = diferencas.columns.contains('diferenca')
+
+
 for index,row in diferencas.iterrows():
     limite_fundo = []
     for col in ['diferenca_total_ano', 'diferenca_total_emissor', 'diferenca_total_pl_privado']:     
@@ -34,3 +47,5 @@ minimizador = scipy.optimize.minimize(
 )    
 erro = minimizador.fun
 regua_otimizada = minimizador.x
+
+#Salvar Regua Otimizada e Erro

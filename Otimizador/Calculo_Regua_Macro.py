@@ -1,11 +1,5 @@
 import pandas as pd
-from typing import List,Callable
-import matplotlib.pyplot as plt
-import seaborn as sns
-import time
-import numpy as np
-import scipy
-
+from typing import List
 #Funções Auxiliares
 #Funções Intermédiarias da Função Principal
 def query(arquivo:str) -> pd.DataFrame:
@@ -146,42 +140,34 @@ def redistribuir(regua_macro:pd.DataFrame,restritos:pd.DataFrame) -> pd.DataFram
     regua_macro['percentual_alocacao'] = fundos_nao_restritos['percentual_alocacao'] + excedente_distribuido
     return regua_macro
 
+
+#Buscar  Informações
 dataframes = extrair_informacoes()
+ativo = ''
+inf_fundos = dataframes[0]
+peso_books = dataframes[1]
+credito_aportado = dataframes[2]
+restricoes = dataframes[3:5]
+book_ativos = dataframes[5]   
 
+#Qual o book referente ao ativo da ordem
+book_ativo = book_ativos[book_ativos['ativo'] == ativo]['book_micro'].values[0]
+book_macro = encontrar_book_macro(book_ativo)
 
-def regua_macro(ativo:str) -> pd.DataFrame:
-    '''
-    Função principal que recebe como input:
-    1. ativo 
-    1. ordens_final: DatFrame ['Ticker','Amount','Price','Fundo'] representando quanto irá para cada fundo
-    '''
-    #Essas  etapas são para 1 ordem -> 1 linha do dataframe ordens
+#Calcular a Régua Book Macro 
+regua_macro = calculo_regua_macro(inf_fundos,peso_books,credito_aportado['alocado'].sum())
 
-    #Extrair dataframes necessários
-    inf_fundos = dataframes[0]
-    peso_books = dataframes[1]
-    credito_aportado = dataframes[2]
-    restricoes = dataframes[3:5]
-    book_ativos = dataframes[5]   
-   
-    #Qual o book referente ao ativo da ordem
-    book_ativo = book_ativos[book_ativos['ativo'] == ativo]['book_micro'].values[0]
-    book_macro = encontrar_book_macro(book_ativo)
+#Filtrar Régua pelo Book do Ativo
+regua_macro = regua_macro[regua_macro['book'] == book_macro]
 
-    #Calcular a Régua Book Macro 
-    regua_macro = calculo_regua_macro(inf_fundos,peso_books,credito_aportado['alocado'].sum())
-   
-    #Filtrar Régua pelo Book do Ativo
-    regua_macro = regua_macro[regua_macro['book'] == book_macro]
-    
-    #Aplicar Restrição de book micro e fundo restrito
-    alocacoes_restritos= verificar_restricoes(ativo,book_ativo,regua_macro,restricoes[0],restricoes[1])
-   
-    #Redistribuir 
-    regua = redistribuir(regua_macro,alocacoes_restritos)
-    regua = regua[regua['percentual_alocacao'] != 0].dropna()
+#Aplicar Restrição de book micro e fundo restrito
+alocacoes_restritos= verificar_restricoes(ativo,book_ativo,regua_macro,restricoes[0],restricoes[1])
 
-    #Retornar Regua
-    return regua
+#Redistribuir 
+regua = redistribuir(regua_macro,alocacoes_restritos)
+regua = regua[regua['percentual_alocacao'] != 0].dropna()
+
+#Salvar Régua como DataFrame no Sistema de Volumes
+
    
 
