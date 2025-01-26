@@ -1,12 +1,16 @@
 #testando
 import pandas as pd
 from typing import List
+import os
+from pathlib import Path
 #Funções Auxiliares
 #Funções Intermédiarias da Função Principal
 def query(arquivo:str) -> pd.DataFrame:
-    caminho_base = "/Workspace/Users/joaopedroalexandrino6@hotmail.com/desafio_kinea_2025/ScriptsSQL"
-    caminho = caminho_base +'/' + arquivo + '.sql'
-    with open(caminho, 'r') as f:
+    #caminho_base = "/Workspace/Users/joaopedroalexandrino6@hotmail.com/desafio_kinea_2025/ScriptsSQL"
+    dir_atual = Path(os.getcwd())
+    path_final = dir_atual.absolute().parent / Path("ScriptsSQL") / Path("TemplatesPython") / Path(arquivo+'.sql')
+    #caminho = path_final + '/' + arquivo + '.sql'
+    with open(path_final, 'r') as f:
         query = f.read()
     df = spark.sql(query).toPandas()
     return df
@@ -104,6 +108,7 @@ def calculo_regua_macro(inf_fundos: pd.DataFrame, peso_books_fundos:pd.DataFrame
     return regua
 
 def encontrar_book_macro(book_micro:str) -> str:
+    print(book_micro)
     if book_micro.split('_')[0] == "HG":
         book_macro = 'HG'
     elif book_micro.split('_')[0] == "HY":
@@ -111,7 +116,7 @@ def encontrar_book_macro(book_micro:str) -> str:
     elif book_micro.split('_')[0] == "MY":
         book_macro = 'MY'
     elif book_micro.split('_')[0] == "Debenture":
-        if book_micro.split('_')[3] == "HG":
+        if book_micro.split('_')[2] == "HG":
             book_macro = "Debenture_Fechada_HG"
         else:
              book_macro = "Debenture_Fechada_HY"
@@ -144,7 +149,7 @@ def redistribuir(regua_macro:pd.DataFrame,restritos:pd.DataFrame) -> pd.DataFram
 
 #Buscar  Informações
 dataframes = extrair_informacoes()
-ativo = ''
+ativo = 'CESE22'
 inf_fundos = dataframes[0]
 peso_books = dataframes[1]
 credito_aportado = dataframes[2]
@@ -170,5 +175,6 @@ regua = regua[regua['percentual_alocacao'] != 0].dropna()
 
 #Salvar Régua como DataFrame no Sistema de Volumes
 
+display(regua)
    
 

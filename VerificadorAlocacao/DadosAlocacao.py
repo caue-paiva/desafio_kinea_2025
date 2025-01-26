@@ -380,12 +380,14 @@ class DadosAlocacao:
         return self.__ler_csv("verificacao_range_e_book.csv")
 
 
-
 if __name__ == "__main__":
     argumento_linha:str = sys.argv[1] if len(sys.argv) > 1 else "False"
     if argumento_linha.lower().strip() == "true":
         forca_atualizacao = True
+        print("Força atualização")
     else:
         forca_atualizacao = False
+        print("Não força atualização")
+
     dados = DadosAlocacao(forca_atualizacao)
  
