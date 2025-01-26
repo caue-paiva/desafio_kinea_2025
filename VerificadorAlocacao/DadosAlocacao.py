@@ -1,4 +1,4 @@
-import os
+import os,sys
 from pathlib import Path
 from pyspark.sql import DataFrame
 from databricks.sdk.runtime import *
@@ -16,8 +16,9 @@ class _Queries:
       "tabelascar_info_ativos.sql",
       "PL_total_fundo.sql",
       "PL_credito_privado_por_fundo.sql",
-      #"PL_total_e_credito_privado_fundos.sql",
-      "mapa_tabelacar.sql"
+      "mapa_tabelacar.sql",
+      "credito_aportado.sql",
+      "verificacao_range_e_book.sql"
     ]
     RATINGS_ORDENADOS  = [
         "Aaa", "Aa2", "Aa3",
@@ -118,6 +119,31 @@ class _Queries:
         query = self.dict_queries["mapa_tabelacar.sql"]
         return spark.sql(query)
     
+    def verificacao_range_e_book(self)->DataFrame:
+        """
+        Query para etapa final, de relacionar ativos com seus fundos, dando join pelo book do ativo
+        com o book_micro das restrições de cada book para verificar se o ativo pode ser alocado ou não
+        dentro daquele book para determinado fundo (apontado pela flag "flag").
+
+        Há também relacionado qual o peso de cada classe de ativo que será alocado para cada fundo, além
+        do range de alocação mínima e máxima para cada fundo.
+
+        Será utilizado no processamento final para realizar a redistribuição entre os fundos de acordo com
+        a régua que é calculada anteriormente no processo.
+
+        Essa tabela está relacionada com as restrições das classes ResultadoRange e ResultadoRestricaoBook
+        """
+        query = self.dict_queries["verificacao_range_e_book.sql"]
+        return spark.sql(query)
+    
+    def credito_aportado(self)->DataFrame:
+        """
+        Retorna um DF com o credito aportado por fundo
+        """
+        query = self.dict_queries["credito_aportado.sql"]
+        return spark.sql(query)
+    
+    
 class DadosAlocacao:
     
     __QUERIES = _Queries()
@@ -131,6 +157,8 @@ class DadosAlocacao:
         "PL_total_fundo": timedelta(days=1),
         "PL_credito_privado_por_fundo": timedelta(days=1),
         "mapa_tabelacar": timedelta(weeks=4),
+        "verificacao_range_e_book": timedelta(days=1),
+        "credito_aportado": timedelta(days=1),
     }
     __MAPA_TABELAS_METODOS:dict = {
         "tabelascar_pl_emissores": __QUERIES.tabelascar_pl_emissor,
@@ -139,19 +167,21 @@ class DadosAlocacao:
         "tabelascar_info_ativos": __QUERIES.tabelascar_info_ativos,
         "PL_total_fundo": __QUERIES.pl_total_fundos,
         "PL_credito_privado_por_fundo": __QUERIES.pl_credito_privado_fundos,
-        "mapa_tabelacar": __QUERIES.mapa_tabelacar
+        "mapa_tabelacar": __QUERIES.mapa_tabelacar,
+        "verificacao_range_e_book": __QUERIES.verificacao_range_e_book,
+        "credito_aportado": __QUERIES.credito_aportado,
     }
     __METODOS_COM_ARGS = ["tabelascar_L_anos","tabelascar_info_fundos"]
 
     datas_atualizacao:dict[str, datetime | None] #dado o nome de uma query/tabela diz qual foi a última vez que ela foi atualizada
     path_folder_dados:Path
 
-    def __init__(self):
-        dir_atual = Path(os.getcwd())
-        path_final = dir_atual.absolute() / Path("DadosVerificacao")
+    def __init__(self, forca_atualizacao = False):
+        #dir_atual = Path(os.getcwd())
+        path_final = Path("/Volumes/desafio_kinea/boletagem_cp/files/DadosIniciais")
         self.path_folder_dados = path_final
         self.__ler_arquivo_datas()
-        self.__verifica_dados_atualizados()
+        self.__verifica_dados_atualizados(forca_atualizacao)
        
     def __ler_arquivo_datas(self)->None:
         if not Path(self.__ARQUIVOS_DATAS).exists():
@@ -177,6 +207,11 @@ class DadosAlocacao:
             datas_atualizacao[row.nome_tabela] = data
         self.datas_atualizacao = datas_atualizacao
 
+        for tabela in self.__DATAS_PARA_ATUALIZAR: #caso o arquivo esteja com algum dado faltando, coloca ele aqui nesse loop, com a data de atualização como None
+            if tabela not in  self.datas_atualizacao:
+                self.datas_atualizacao[tabela] = None
+
+
     def __escreve_arquivo_datas(self)->None:
         path = self.path_folder_dados / Path(self.__ARQUIVOS_DATAS)
         datas_df = pd.DataFrame(columns=["nome_tabela","data_atualizacao"])
@@ -185,11 +220,12 @@ class DadosAlocacao:
             datas_df = pd.concat([datas_df, new_row], ignore_index=True)
         datas_df.to_csv(path,index=False)
 
-    def __verifica_dados_atualizados(self)->None:
+    def __verifica_dados_atualizados(self,forca_atualizacao = False)->None:
         atualizou_tabela = False
         for tabela,data_atualizacao in self.datas_atualizacao.items():
             tempo_max_atualizar = self.__DATAS_PARA_ATUALIZAR[tabela]
-            if data_atualizacao is None: #atualiza dados
+            if data_atualizacao is None or forca_atualizacao: #atualiza dados
+                print("atualizando tabela: ", tabela)
                 atualizou_tabela = True
                 self.__atualizar_dados(tabela) 
                 continue
@@ -217,13 +253,11 @@ class DadosAlocacao:
 
     def __atualizar_dados(self,tabela:str)->None:
         if tabela in self.__METODOS_COM_ARGS:
-            print("atualiza especial")
             self.__atualizar_tabelas_arg(tabela)
         else:        
             df = self.__MAPA_TABELAS_METODOS[tabela]().toPandas()
             path = str(self.path_folder_dados / Path(f"{tabela}.csv"))
             df.to_csv(path,index=False)
-            #df.write.csv(path, mode="overwrite")
         self.datas_atualizacao[tabela] = datetime.now()
         
     def __calcula_ratings_info_fundos(self)->None:
@@ -330,9 +364,28 @@ class DadosAlocacao:
         """
         self.__verifica_dados_atualizados()
         return self.__ler_csv("mapa_tabelacar.csv")
+    
+    def get_credito_aportado(self) -> pd.DataFrame | None:
+        """
+        Retorna um DF com o crédito aportado por cada fundo
+        """
+        self.__verifica_dados_atualizados()
+        return self.__ler_csv("credito_aportado.csv")
+    
+    def get_verificacao_range_e_book(self) -> pd.DataFrame | None:
+        """
+        Retorna um DF com a verificação de range e book de cada fundo
+        """
+        self.__verifica_dados_atualizados()
+        return self.__ler_csv("verificacao_range_e_book.csv")
+
 
 
 if __name__ == "__main__":
-    dados = DadosAlocacao()
-    df = dados.get_pl_por_emissor_e_vencimento_anos(6)
-    display(df)
+    argumento_linha:str = sys.argv[1] if len(sys.argv) > 1 else "False"
+    if argumento_linha.lower().strip() == "true":
+        forca_atualizacao = True
+    else:
+        forca_atualizacao = False
+    dados = DadosAlocacao(forca_atualizacao)
+ 
