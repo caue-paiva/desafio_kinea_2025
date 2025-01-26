@@ -3,20 +3,11 @@ import pandas as pd
 from typing import List
 import os
 from pathlib import Path
-from ..VerificadorAlocacao import DadosAlocacao
+from DadosAlocacao import DadosAlocacao
+
 #Funções Auxiliares
 #Funções Intermédiarias da Função Principal
-def query(arquivo:str) -> pd.DataFrame:
-    #caminho_base = "/Workspace/Users/joaopedroalexandrino6@hotmail.com/desafio_kinea_2025/ScriptsSQL"
-    dir_atual = Path(os.getcwd())
-    path_final = dir_atual.absolute().parent / Path("ScriptsSQL") / Path("TemplatesPython") / Path(arquivo+'.sql')
-    #caminho = path_final + '/' + arquivo + '.sql'
-    with open(path_final, 'r') as f:
-        query = f.read()
-    df = spark.sql(query).toPandas()
-    return df
-
-def extrair_informacoes() -> List[pd.DataFrame]:
+def extrair_informacoes(dados_alocacao: DadosAlocacao) -> List[pd.DataFrame]:
     '''
     Objetivo:
         Extrair informações necessárias para o Cálculo da Régua
@@ -31,8 +22,9 @@ def extrair_informacoes() -> List[pd.DataFrame]:
         5. ativos_books: DataFrame com ativos e seus books ['ativo','book_micro'] (Pode ser que não tenhamos todos cadastrados)
     '''
     #Tabela Base
-    tabela_base = query("verificacao_range_e_book")
-    tabela_base_aportado = query("credito_aportado")
+    tabela_base = dados_alocacao.get_verificacao_range_e_book()
+    tabela_base_aportado = dados_alocacao.get_credito_aportado()
+   
 
 
     #Filtrando inf_fundos ['fundo','PL','l_min','l_max','v_min','v_max']
@@ -109,7 +101,6 @@ def calculo_regua_macro(inf_fundos: pd.DataFrame, peso_books_fundos:pd.DataFrame
     return regua
 
 def encontrar_book_macro(book_micro:str) -> str:
-    print(book_micro)
     if book_micro.split('_')[0] == "HG":
         book_macro = 'HG'
     elif book_micro.split('_')[0] == "HY":
@@ -148,8 +139,11 @@ def redistribuir(regua_macro:pd.DataFrame,restritos:pd.DataFrame) -> pd.DataFram
     return regua_macro
 
 
+# Instancia classe de Queries 
+dados =  DadosAlocacao()
+
 #Buscar  Informações
-dataframes = extrair_informacoes()
+dataframes = extrair_informacoes(dados)
 ativo = 'CESE22'
 inf_fundos = dataframes[0]
 peso_books = dataframes[1]
