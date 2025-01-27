@@ -79,6 +79,9 @@ class VerificadorTabelacar:
             if not hasattr(row, 'RatingKinea'):
                 lista_ratings.append(row.IntervaloRating) # Trocar para IntervaloRating
                 lista_nivels.append(row.Nivel)
+            else:
+                list_ratings.append(row.RatingKinea)
+                lista_nivels.append(row.Nivel)
         
         ratings_dict = self.__construir_dict_ratings(lista_ratings,lista_nivels)
 
