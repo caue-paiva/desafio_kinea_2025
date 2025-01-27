@@ -171,8 +171,8 @@ class ReguaMacro:
 
         #Salvar Régua como DataFrame no Sistema de Volumes
         if salva_no_volume:
-            path = Path("/Volumes/desafio_kinea/boletagem_cp/files/Reguas") / Path(f"Regua_{ativo}.csv")
-            regua.to_csv(path,index=False)
+            path = Path("/Volumes/desafio_kinea/boletagem_cp/files/Reguas") / Path(f"Regua_{ativo}.csv") 
+            regua.to_csv(path,index=False) #Necessário Tratar nome de ativos com espaços e /
         
         return regua
        
