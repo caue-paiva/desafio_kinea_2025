@@ -305,6 +305,22 @@ class DadosAlocacao:
         df_join = df_join.fillna(0) #valores nulos viram 0
 
         return df_join
+    
+    def _pl_credito_privado_rating_aux(self,rating:str)->pd.DataFrame | None:
+        """
+        Objetivo: A query em SQL de pegar o PL de um fundo filtrado por ativos de certo rating tem o problema de excluir algumas combinações de ativos e fundos por eles terem 0 de pl (nenhum ativo) que satisfaz o filtro.
+        Esse método faz a query sem filtro, acha as combinações única que estão faltando e dá append no dataframe delas com soma de PL 0
+        """
+
+        df_sem_filtro = self.get_pl_credito_privado_fundos() #pega o df sem filtro com todos os ativos de cred. privado, sem filtrar pelo rating
+        if df_sem_filtro is None:
+            return None
+        df_sem_filtro = df_sem_filtro[["TradingDesk"]]
+        df_filtrado = self.__ler_csv(f"tabelascar_info_fundos_rating_{rating}.csv") #df filtrado pelo rating
+        df_join = df_sem_filtro.merge(df_filtrado,how="left",on=["TradingDesk"]) #left join, trazendo todos os valores únicos de Trading desk
+        df_join = df_join.fillna(0) #valores nulos viram 0
+
+        return df_join
 
     def get_pl_e_rating_por_emissor(self)->pd.DataFrame | None:
         """
@@ -318,7 +334,7 @@ class DadosAlocacao:
         Retorna o PL de crédito privado de um fundo filtrando por ativos com rating igual ou pior que o especificado
         """
         self.__verifica_dados_atualizados()
-        return self.__ler_csv(f"tabelascar_info_fundos_rating_{rating}.csv")
+        return self._pl_credito_privado_rating_aux(rating) #função auxiliar para lidar com valores que faltam com a filtragem pelo rating
 
     def get_pl_por_emissor_e_vencimento_anos(self,anos_vencimentos:int)->pd.DataFrame | None:
         """
