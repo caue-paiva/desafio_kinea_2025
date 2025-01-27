@@ -76,8 +76,9 @@ class VerificadorTabelacar:
         lista_ratings = []
         lista_nivels = []
         for row in tabela_car.itertuples():
-            lista_ratings.append(row.RatingKinea) # Trocar para IntervaloRating
-            lista_nivels.append(row.Nivel)
+            if not hasattr(row, 'RatingKinea'):
+                lista_ratings.append(row.IntervaloRating) # Trocar para IntervaloRating
+                lista_nivels.append(row.Nivel)
         
         ratings_dict = self.__construir_dict_ratings(lista_ratings,lista_nivels)
 
@@ -143,7 +144,7 @@ class VerificadorTabelacar:
     def __df_com_pl_total_e_por_rating(self, rating:str)->pd.DataFrame:
         df_pl_total = self.__dados_alocacao.get_pl_total_fundos()
         df_pl_rating = self.__dados_alocacao.get_pl_fundo_por_rating(rating)
-        df_pl_rating = df_pl_rating.rename({"total_credito":"pl_credito_privado_rating"},axis=1)
+        df_pl_rating = df_pl_rating.rename(columns={"total_credito":"pl_credito_privado_rating"})
         return df_pl_total.merge(df_pl_rating,how="inner",left_on="TradingDesk",right_on="TradingDesk")
     
     def __verificacao_emissor_e_l_anos(
@@ -160,7 +161,6 @@ class VerificadorTabelacar:
         
         df_pl_por_emissor = self.__dados_alocacao.get_pl_e_rating_por_emissor() #df do pl de cada emissor num fundo
         df_pl_emissor_l_anos = self.__dados_alocacao.get_pl_por_emissor_e_vencimento_anos(vencimento_em_anos)
-
         linha_tabela_car:pd.DataFrame = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_ou_abaixo_emissor.keys()))] #filtra tabelacar pelos ratings do emissor
         
         porcentagem_max_pelo_ano:float | None = self.__verificacao_l_anos(linha_tabela_car,vencimento_em_anos) #porcentagem maximo do PL de um fundo por emissor
@@ -191,13 +191,12 @@ class VerificadorTabelacar:
     def __verificacao_max_pl (self, linha_tabela_car:pd.Series, fundo:str, alocacao_porcen: float)->dict[str,float]:
         # TODO TODO TODO TODO !!!!!Pedir para o Rapha mudar nome da coluna p/ IntervaloRating para Tabela Car "Fundos Hibridos"!!!!!!
         
-        maior_rating_linha_tabela_car = linha_tabela_car["RatingKinea"].values[0].split(" ")[0]  #acha o maior rating se for um range
+        maior_rating_linha_tabela_car = linha_tabela_car["IntervaloRating"].values[0].split(" ")[0]  #acha o maior rating se for um range
         fundo_pl_cred_priv_pl_total = self.__df_com_pl_total_e_por_rating(maior_rating_linha_tabela_car) #pega PL de credito privado de um fundo  de um fundo filtrado por esse  rating
         df_pl_fltrado = fundo_pl_cred_priv_pl_total[fundo_pl_cred_priv_pl_total["TradingDesk"] == fundo]  #filtra pelo fundo
-        
         pl_total:float = df_pl_fltrado["PL"].values[0] #pl total do fundo
-        pl_credito_privado_rating: float = df_pl_fltrado["pl_credito_privado_rating"].values[0] #pl de credito pelo rating
-    
+        pl_credito_privado_rating: float = df_pl_fltrado["total_credito_rating"].values[0] #pl de credito pelo rating
+
 
         porcen_real_credito_privado_rating:float = (pl_credito_privado_rating / pl_total) + alocacao_porcen
         porcen_max_credito_privado_rating: float = linha_tabela_car["MaxPL"].values[0] #porcentagem maxima permitida pela tabelacar
@@ -240,23 +239,22 @@ class VerificadorTabelacar:
         rating_emissor:str = df_ativo_filtrado["RatingGrupo"].values[0]
         emissor_nome:str = df_ativo_filtrado["Emissor"].values[0]
         vencimento_anos_ativo:int = int(df_ativo_filtrado["ExpiracaoAnos"].values[0])
-
         for i,fundo in enumerate(alocacao["fundo"]):
             tabela_car_fundo: pd.DataFrame = self.__tabelacar_do_fundo(fundo)
             alocacao_valor: float = alocacao["valor"][i] #valor a ser alocado
-            
+            ratingOP = df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0]
+            ratingGrupo = df_ativos[df_ativos["Ativo"] == ativo]["RatingGrupo"].values[0]
             ratings_igual_abaixo:dict = self.__get_ratings_igual_abaixo(df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0],
                                                             tabela_car_fundo)
             
             ratings_igual_abaixo_emissor:dict = self.__get_ratings_igual_abaixo(df_ativos[df_ativos["Ativo"] == ativo]["RatingGrupo"].values[0],
                                                             tabela_car_fundo)
-
+    
             # Linha referente ao rating do ativo específico e a tabela car referente ao fundo
             # Pega o maior rating da linha da tabela car relacionada ao ativo. Ex: rating_ativo = Baa3, linha = "Baa1 a Baa4" ->
             # Retornará Baa1. Será utilizado para pegar dos CSV's já salvos com a soma do position de todos os ativos abaixo de Baa1.
             # Caso seja apenas Baa3 no campo de rating da linha da tabela car, será pego o CSV relacionado à esse rating + os ativos abaixo 
             linha_tabela_car_ativo:pd.DataFrame = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_abaixo.keys()))] #df de uma linha
-            
             resultado_max_pl = self.__verificacao_max_pl(
                 linha_tabela_car_ativo,fundo,alocacao_valor
             )

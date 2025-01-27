@@ -178,7 +178,7 @@ class ReguaMacro:
        
 if __name__ == "__main__":
     regua = ReguaMacro()
-    df = regua.calcula_regua('CESE22',True)
+    df = regua.calcula_regua('EATEA1',True)
     display(df)
         
 
