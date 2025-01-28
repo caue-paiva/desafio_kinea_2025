@@ -246,7 +246,7 @@ class VerificadorTabelacar:
         vencimento_anos_ativo:int = int(df_ativo_filtrado["ExpiracaoAnos"].values[0])
         for i,fundo in enumerate(alocacao["fundo"]):
             tabela_car_fundo: pd.DataFrame = self.__tabelacar_do_fundo(fundo)
-            alocacao_valor: float = alocacao["valor"][i] #valor a ser alocado
+            alocacao_valor: float = alocacao["percentual_alocacao"][i] #valor a ser alocado
             ratingOP = df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0]
             ratingGrupo = df_ativos[df_ativos["Ativo"] == ativo]["RatingGrupo"].values[0]
             ratings_igual_abaixo:dict = self.__get_ratings_igual_abaixo(df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0],
@@ -283,7 +283,7 @@ if __name__ == "__main__":
     ativo = 'ENMTA4'
     fundo_dist_regua = {
         'fundo': ['RFA', 'APO', 'ID2'],
-        'valor': [sum([0.4753, 0.2623, 0.3275]),
+        'percentual_alocacao': [sum([0.4753, 0.2623, 0.3275]),
                 sum([0.1017, 0.3478, 0.1845]),
                 sum([0.4230, 0.3899, 0.4879])]
     }
