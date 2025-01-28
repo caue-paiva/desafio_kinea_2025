@@ -70,15 +70,11 @@ if __name__ == "__main__":
     ativo = 'CPGT18'
     verificador = VerificadorTabelacar()
     df_regua = pd.read_csv(f"/Volumes/desafio_kinea/boletagem_cp/files/Reguas/Regua_{ativo}.csv")
-    ordem_dict = {}
-    for col in df_regua.columns:
-        ordem_dict[col] = list(df_regua[col])
-    print(ordem_dict)
-    df_diferencas = verificador.verifica_alocacao(ordem_dict,ativo)
+    display(df_regua)
+    df_diferencas = verificador.verifica_alocacao(df_regua,ativo)
     display(df_diferencas)
   
     #regua_otimizada,erro = otimiza_regua(df_regua,df_diferencas)
-
     #print(erro)
     #display(regua_otimizada)
  

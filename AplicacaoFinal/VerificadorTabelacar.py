@@ -212,12 +212,12 @@ class VerificadorTabelacar:
             "pl_total_fundo": pl_total
         }
 
-    def verifica_alocacao(self,alocacao:dict,ativo:str)->pd.DataFrame:
+    def verifica_alocacao(self,alocacao:pd.DataFrame,ativo:str)->pd.DataFrame:
         """
         Verifica uma alocação de um ativo em diversos fundos (alocação por porcentagem do PL de cada fundo) de acordo com as regras das tabelasCar (Associando o rating do ativo, rating de emissor e anos de vecimento dos ativos com limites de crédito de um fundo).
 
         Args:
-            alocacao (dict): dict das alocações, com uma chave "fundo" com  a lista de fundos que o ativo será alocado e uma chave "valor" com a lista de alocação (em percentual) de cada fundo (com o mesmo índice)
+            alocacao (pd.DataFrame): df das alocações, com uma coluna "fundo" com  a lista de fundos que o ativo será alocado e uma coluna "percentual_alocacao" com a lista de alocação (em percentual) de cada fundo (com o mesmo índice)
             ativo (str): nome do ativo que será alocado
         Return:
             (pd.DataFrame): df com as informações de cada fundo, a diferença total e em precentual de cada verificação com o maximo da tabelaCar (negativo => passou do limite) se passou ou não em cada uma das regras
@@ -237,6 +237,10 @@ class VerificadorTabelacar:
                 "passou_l_anos": []
         }
 
+        alocacao_dict = {}
+        for col in alocacao.columns: #transforma o DF em um dict para manusear de forma mais fáci
+            alocacao_dict[col] = list(alocacao[col])
+
         df_ativos = self.__dados_alocacao.get_info_rating_ativos() #df com informações sobre cada ativo,ratings e emissores
         #Pegar dados sobre o ativo,seus rating, o seu emissor e rating do emissor
         df_ativo_filtrado = df_ativos[df_ativos["Ativo"] == ativo]
@@ -244,9 +248,9 @@ class VerificadorTabelacar:
         rating_emissor:str = df_ativo_filtrado["RatingGrupo"].values[0]
         emissor_nome:str = df_ativo_filtrado["Emissor"].values[0]
         vencimento_anos_ativo:int = int(df_ativo_filtrado["ExpiracaoAnos"].values[0])
-        for i,fundo in enumerate(alocacao["fundo"]):
+        for i,fundo in enumerate(alocacao_dict["fundo"]):
             tabela_car_fundo: pd.DataFrame = self.__tabelacar_do_fundo(fundo)
-            alocacao_valor: float = alocacao["percentual_alocacao"][i] #valor a ser alocado
+            alocacao_valor: float = alocacao_dict["percentual_alocacao"][i] #valor a ser alocado
             ratingOP = df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0]
             ratingGrupo = df_ativos[df_ativos["Ativo"] == ativo]["RatingGrupo"].values[0]
             ratings_igual_abaixo:dict = self.__get_ratings_igual_abaixo(df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0],
@@ -287,5 +291,7 @@ if __name__ == "__main__":
                 sum([0.1017, 0.3478, 0.1845]),
                 sum([0.4230, 0.3899, 0.4879])]
     }
-    resultado_df = verificador.verifica_alocacao(fundo_dist_regua,ativo)
+
+    df = pd.DataFrame(fundo_dist_regua)
+    resultado_df = verificador.verifica_alocacao(df,ativo)
     display(resultado_df)
