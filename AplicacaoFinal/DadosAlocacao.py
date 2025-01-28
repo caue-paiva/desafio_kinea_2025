@@ -282,6 +282,15 @@ class DadosAlocacao:
 
     def __ler_csv(self,nome_tabela:str)->pd.DataFrame | None:
         try:
+            if "anos" in nome_tabela:
+                texto_ano = nome_tabela.split('_')[2]
+                ano = int(texto_ano[4:].split('.')[0])      
+                if ano % 2 != 0:
+                    if ano < 10:
+                        ano = ano -1 
+                    else:
+                        ano = 10
+                nome_tabela = f"tabelascar_L_anos{ano}.csv"    
             path = self.path_folder_dados / Path(f"{nome_tabela}")
             df = pd.read_csv(path)
             return df

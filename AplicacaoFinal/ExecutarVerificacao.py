@@ -14,6 +14,6 @@ def ExecutarVerificacoes():
         alocacao_dic['valor'] = alocacao['percentual_alocacao'].tolist()
         verificador = VerificadorTabelacar()
         resultado_verificacao = verificador.verifica_alocacao(alocacao_dic,ativo)
-    
+        resultado_verificacao.to_csv(f"/Volumes/desafio_kinea/boletagem_cp/files/VerificacaoTabelasCar/VERIFICACAO_{ativo}.csv",index=False)
 if __name__ == '__main__':
     regua = ExecutarVerificacoes()

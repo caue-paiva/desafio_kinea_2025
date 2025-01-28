@@ -80,7 +80,7 @@ class VerificadorTabelacar:
                 lista_ratings.append(row.IntervaloRating) # Trocar para IntervaloRating
                 lista_nivels.append(row.Nivel)
             else:
-                list_ratings.append(row.RatingKinea)
+                lista_ratings.append(row.RatingKinea)
                 lista_nivels.append(row.Nivel)
         
         ratings_dict = self.__construir_dict_ratings(lista_ratings,lista_nivels)
@@ -193,8 +193,10 @@ class VerificadorTabelacar:
 
     def __verificacao_max_pl (self, linha_tabela_car:pd.Series, fundo:str, alocacao_porcen: float)->dict[str,float]:
         # TODO TODO TODO TODO !!!!!Pedir para o Rapha mudar nome da coluna p/ IntervaloRating para Tabela Car "Fundos Hibridos"!!!!!!
-        
+        if("IntervaloRating" not in linha_tabela_car.columns):
+            linha_tabela_car.rename(columns={"RatingKinea":"IntervaloRating"},inplace=True)
         maior_rating_linha_tabela_car = linha_tabela_car["IntervaloRating"].values[0].split(" ")[0]  #acha o maior rating se for um range
+       
         fundo_pl_cred_priv_pl_total = self.__df_com_pl_total_e_por_rating(maior_rating_linha_tabela_car) #pega PL de credito privado de um fundo  de um fundo filtrado por esse  rating
         df_pl_fltrado = fundo_pl_cred_priv_pl_total[fundo_pl_cred_priv_pl_total["TradingDesk"] == fundo]  #filtra pelo fundo
         pl_total:float = df_pl_fltrado["PL"].values[0] #pl total do fundo
