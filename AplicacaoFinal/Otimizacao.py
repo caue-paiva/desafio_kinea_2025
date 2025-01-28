@@ -15,9 +15,6 @@ def otimiza_regua(regua_ideal:pd.DataFrame, diferencas:pd.DataFrame)->tuple[pd.D
     Return:
         (tuple[pd.DataFrame,float]): tupla com o DF da régua otimizada e o erro da otimização
     """
-    #Pegar inputs
-    # regua_ideal = ''
-    #diferencas = ''
 
     #Inicia uma Régua com os valores distribuidos uniformemente entre os fundos
     x0 = np.array([1/len(regua_ideal)] * len(regua_ideal))
@@ -38,8 +35,7 @@ def otimiza_regua(regua_ideal:pd.DataFrame, diferencas:pd.DataFrame)->tuple[pd.D
     #Transformar Diferenças em Constraints
     limites = {}
     diferencas = diferencas.reset_index(drop=True)
-    colunas_valores = diferencas.columns.contains('diferenca')
-
+    colunas_valores = list(filter(lambda x: "diferenca" in x ,diferencas.columns)) #filtra penas colunas do DF de diferença (percentual e total)
 
     for index,row in diferencas.iterrows():
         limite_fundo = []
@@ -62,19 +58,29 @@ def otimiza_regua(regua_ideal:pd.DataFrame, diferencas:pd.DataFrame)->tuple[pd.D
     regua_otimizada = minimizador.x
 
     #Salvar Regua Otimizada e Erro
+    regua_ideal["alocacao_otimizada"] = regua_otimizada
 
-    return regua_otimizada,erro
+    return regua_ideal,erro
+
+def otimiza_ativo(verificador:VerificadorTabelacar, ativo:str)->tuple[pd.DataFrame,float]:
+    """
+    Dado um ativo com sua regua já calculada e salva (em .csv) no volume de armazenamento do desafio, no Path /Reguas/ e uma classe de verificacao, otimiza a regua de acordo com as diferenças entre 
+    a alocação ideal e as restrições impostas pelo verificador (as das tabelascar).
+
+    Args:
+        verificador (VerificadorTabelacar): Classe de verificação
+        ativo (str): Nome do ativo
+    Returns:
+        (pd.DataFrame,float): tupla com o DF da régua otimizada (com novos valores na coluna "alocacao_otimizada") e o erro da otimização
+    """
+    df_regua = pd.read_csv(f"/Volumes/desafio_kinea/boletagem_cp/files/Reguas/Regua_{ativo}.csv")
+    df_diferencas = verificador.verifica_alocacao(df_regua,ativo)
+    return otimiza_regua(df_regua,df_diferencas)
 
 
 if __name__ == "__main__":
     ativo = 'CPGT18'
     verificador = VerificadorTabelacar()
-    df_regua = pd.read_csv(f"/Volumes/desafio_kinea/boletagem_cp/files/Reguas/Regua_{ativo}.csv")
-    display(df_regua)
-    df_diferencas = verificador.verifica_alocacao(df_regua,ativo)
-    display(df_diferencas)
-  
-    #regua_otimizada,erro = otimiza_regua(df_regua,df_diferencas)
-    #print(erro)
-    #display(regua_otimizada)
- 
+    df_otimizado,erro = otimiza_ativo(verificador,ativo)
+    print(erro)
+    display(df_otimizado)
