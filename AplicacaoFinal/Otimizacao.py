@@ -75,7 +75,8 @@ def otimiza_ativo(verificador:VerificadorTabelacar, ativo:str)->tuple[pd.DataFra
     """
     df_regua = pd.read_csv(f"/Volumes/desafio_kinea/boletagem_cp/files/Reguas/Regua_{ativo}.csv")
     df_diferencas = verificador.verifica_alocacao(df_regua,ativo)
-    return otimiza_regua(df_regua,df_diferencas)
+    regua_ideal, erro = otimiza_regua(df_regua,df_diferencas)
+    return regua_ideal,erro
 
 
 if __name__ == "__main__":

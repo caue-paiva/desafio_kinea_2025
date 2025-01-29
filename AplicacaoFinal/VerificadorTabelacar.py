@@ -236,12 +236,15 @@ class VerificadorTabelacar:
                 "passou_max_emissor": [],
                 "passou_l_anos": []
         }
-
-        alocacao_dict = {}
-        for col in alocacao.columns: #transforma o DF em um dict para manusear de forma mais fáci
-            alocacao_dict[col] = list(alocacao[col])
-
-        df_ativos = self.__dados_alocacao.get_info_rating_ativos() #df com informações sobre cada ativo,ratings e emissores
+        #Transformando alocação em Dicionário
+        fundos = alocacao['fundo']
+        percentual_alocacao = alocacao['percentual_alocacao']
+        alocacao_dict = {
+            "fundo": fundos,
+            "percentual_alocacao": percentual_alocacao
+        }
+    
+        df_ativos = self.__dados_alocacao.get_info_rating_ativos() 
         #Pegar dados sobre o ativo,seus rating, o seu emissor e rating do emissor
         df_ativo_filtrado = df_ativos[df_ativos["Ativo"] == ativo]
         rating_ativo:str = df_ativo_filtrado["RatingOp"].values[0] 

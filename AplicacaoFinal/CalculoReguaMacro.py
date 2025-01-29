@@ -168,6 +168,7 @@ class ReguaMacro:
         #Redistribuir 
         regua = self.redistribuir(regua_macro,alocacoes_restritos)
         regua = regua[regua['percentual_alocacao'] != 0].dropna()
+        regua = regua.drop(columns=['book'])
 
         #Salvar Régua como DataFrame no Sistema de Volumes
         if salva_no_volume:
