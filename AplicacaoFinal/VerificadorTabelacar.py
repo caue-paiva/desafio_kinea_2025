@@ -212,13 +212,32 @@ class VerificadorTabelacar:
             "pl_total_fundo": pl_total
         }
 
-    def verifica_alocacao(self,alocacao:pd.DataFrame,ativo:str)->pd.DataFrame:
+    def __percentual_regua_para_percentual_fundo(self,alocacao:pd.DataFrame,ativo:str,volume_alocacao:float):
+        """
+        Dado o percentual da régua, que dita qual a % do volume da trade de um ativo deve ir para cada fundo, transforma essa porcentagem da trade numa porcentagem de alocação (positiva ou negativo) em relação ao PL do fundo alvo
+        """
+
+        pl_total_fundos = self.__dados_alocacao.get_pl_total_fundos() #pl de todos os fundo
+        pl_total_fundos = pl_total_fundos.rename({"TradingDesk":"fundo"},axis=1)
+
+        merged_df = alocacao.merge(pl_total_fundos,how="inner",on="fundo") #join com os fundos da alocação
+        merged_df["alocacao_total"] = merged_df["percentual_alocacao"] * volume_alocacao #total alocado para cada fundo = porcentagem por fundo * total alocado na trade
+        merged_df["percentual_alocacao_fundo"] = merged_df["alocacao_total"] / merged_df["PL"] #alocação total que será feita em cada fundo nessa trade, dividida pelo PL total do fundo
+        display(merged_df)
+        
+        return merged_df
+       
+
+
+
+    def verifica_alocacao(self,alocacao:pd.DataFrame,ativo:str,volume_alocacao:float)->pd.DataFrame:
         """
         Verifica uma alocação de um ativo em diversos fundos (alocação por porcentagem do PL de cada fundo) de acordo com as regras das tabelasCar (Associando o rating do ativo, rating de emissor e anos de vecimento dos ativos com limites de crédito de um fundo).
 
         Args:
             alocacao (pd.DataFrame): df das alocações, com uma coluna "fundo" com  a lista de fundos que o ativo será alocado e uma coluna "percentual_alocacao" com a lista de alocação (em percentual) de cada fundo (com o mesmo índice)
             ativo (str): nome do ativo que será alocado
+            volume_alocacao (float): volume de crédito TOTAL que será alocado no ativo 
         Return:
             (pd.DataFrame): df com as informações de cada fundo, a diferença total e em precentual de cada verificação com o maximo da tabelaCar (negativo => passou do limite) se passou ou não em cada uma das regras
         """
@@ -236,13 +255,20 @@ class VerificadorTabelacar:
                 "passou_max_emissor": [],
                 "passou_l_anos": []
         }
+
+        #o percentual da reǵua é em relação á um trade, precisamos achar o percentual que será alocação em relação ao PL total de cada fundo
+        alocacao_percentual_fundo: pd.DataFrame = self.__percentual_regua_para_percentual_fundo(alocacao,ativo,volume_alocacao)
+
         #Transformando alocação em Dicionário
-        fundos = alocacao['fundo']
-        percentual_alocacao = alocacao['percentual_alocacao']
+        fundos = alocacao_percentual_fundo['fundo']
+        percentual_alocacao = alocacao_percentual_fundo['percentual_alocacao_fundo']
         alocacao_dict = {
             "fundo": fundos,
             "percentual_alocacao": percentual_alocacao
         }
+
+
+  
     
         df_ativos = self.__dados_alocacao.get_info_rating_ativos() 
         #Pegar dados sobre o ativo,seus rating, o seu emissor e rating do emissor
@@ -296,5 +322,5 @@ if __name__ == "__main__":
     }
 
     df = pd.DataFrame(fundo_dist_regua)
-    resultado_df = verificador.verifica_alocacao(df,ativo)
+    resultado_df = verificador.verifica_alocacao(df,ativo,1982127.1)
     display(resultado_df)

@@ -13,7 +13,14 @@ class ProcessaOrdem:
         self.input_path = Path("/Volumes/desafio_kinea/boletagem_cp/files/Ordem/Ordem.csv")
         self.ordem = pd.read_csv(self.input_path)
 
+    def __get_alocacao_total_por_ativo(self):
+        df = self.ordem
+        df["alocacao_total"] = df["quantidade"] * df["preco"]
+        df_agrupado = df.groupby("ativo").sum().reset_index()
+        display(df_agrupado)
+
     def processar_ordem(self): #
+        self.__get_alocacao_total_por_ativo()
         for index, row in self.ordem.iterrows():
             regua = ReguaMacro()
             regua.calcula_regua(row["ativo"],True) #calcula régua e salva no volume

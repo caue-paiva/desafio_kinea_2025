@@ -12,7 +12,7 @@ class ReguaMacro:
 
     #Funções Auxiliares
     #Funções Intermédiarias da Função Principal
-    def extrair_informacoes(self) -> List[pd.DataFrame]:
+    def __extrair_informacoes(self) -> List[pd.DataFrame]:
         '''
         Objetivo:
             Extrair informações necessárias para o Cálculo da Régua
@@ -50,9 +50,12 @@ class ReguaMacro:
         #Filtrando ativos_books ['ativo',book_micro']
         ativos_books = tabela_base[['ativo','book_micro']].drop_duplicates(['ativo'])
 
+        #pl_total_fundo = self.dados.get_pl_total_fundos()
+        #display(pl_total_fundo)
+
         return [inf_fundos,peso_book_fundos,credito_aportado,restricoes_book_micro,restricoes_fundo_restrito,ativos_books]
 
-    def calculo_regua_macro(self, inf_fundos: pd.DataFrame, peso_books_fundos:pd.DataFrame,credito_total:float) -> pd.DataFrame:
+    def __calculo_regua_macro(self, inf_fundos: pd.DataFrame, peso_books_fundos:pd.DataFrame,credito_total:float) -> pd.DataFrame:
         '''
         Objetivo:
             Cálculo da Régua
@@ -105,7 +108,7 @@ class ReguaMacro:
 
         return regua
 
-    def encontrar_book_macro(self, book_micro:str) -> str:
+    def __encontrar_book_macro(self, book_micro:str) -> str:
         if book_micro.split('_')[0] == "HG":
             book_macro = 'HG'
         elif book_micro.split('_')[0] == "HY":
@@ -126,7 +129,7 @@ class ReguaMacro:
             book_macro = "OFFSHORE"
         return book_macro
 
-    def verificar_restricoes(self, ativo:str,book_ativo:str,regua_macro:pd.DataFrame,restricoes_book_micro:pd.DataFrame,restricoes_fundo_restrito:pd.DataFrame) -> dict:
+    def __verificar_restricoes(self, ativo:str,book_ativo:str,regua_macro:pd.DataFrame,restricoes_book_micro:pd.DataFrame,restricoes_fundo_restrito:pd.DataFrame) -> dict:
         
         restricoes_book_micro = restricoes_book_micro[restricoes_book_micro['book_micro'] == book_ativo]
         restricoes_book_micro = restricoes_book_micro.merge(regua_macro,on='fundo')
@@ -137,7 +140,7 @@ class ReguaMacro:
 
         return restricoes
         
-    def redistribuir(self, regua_macro:pd.DataFrame,restritos:pd.DataFrame) -> pd.DataFrame:
+    def __redistribuir(self, regua_macro:pd.DataFrame,restritos:pd.DataFrame) -> pd.DataFrame:
         fundos_nao_restritos = regua_macro[regua_macro['fundo'].isin(restritos['fundo'].unique()) == False]
         excedente_distribuido = (fundos_nao_restritos['percentual_alocacao']/fundos_nao_restritos['percentual_alocacao'].sum()) *restritos['percentual_alocacao'].sum()
         regua_macro['percentual_alocacao'] = fundos_nao_restritos['percentual_alocacao'] + excedente_distribuido
@@ -145,30 +148,33 @@ class ReguaMacro:
 
     def calcula_regua(self,ativo:str, salva_no_volume:bool = False)->pd.DataFrame:
         #Buscar  Informações
-        dataframes = self.extrair_informacoes()
+        dataframes = self.__extrair_informacoes()
         inf_fundos = dataframes[0]
         peso_books = dataframes[1]
         credito_aportado = dataframes[2]
         restricoes = dataframes[3:5]
         book_ativos = dataframes[5]   
+        #pl_total = dataframes[6]
 
         #Qual o book referente ao ativo da ordem
         book_ativo = book_ativos[book_ativos['ativo'] == ativo]['book_micro'].values[0]
-        book_macro = self.encontrar_book_macro(book_ativo)
+        book_macro = self.__encontrar_book_macro(book_ativo)
 
         #Calcular a Régua Book Macro 
-        regua_macro = self.calculo_regua_macro(inf_fundos,peso_books,credito_aportado['alocado'].sum())
+        regua_macro = self.__calculo_regua_macro(inf_fundos,peso_books,credito_aportado['alocado'].sum())
 
         #Filtrar Régua pelo Book do Ativo
         regua_macro = regua_macro[regua_macro['book'] == book_macro]
 
         #Aplicar Restrição de book micro e fundo restrito
-        alocacoes_restritos = self.verificar_restricoes(ativo,book_ativo,regua_macro,restricoes[0],restricoes[1])
+        alocacoes_restritos = self.__verificar_restricoes(ativo,book_ativo,regua_macro,restricoes[0],restricoes[1])
 
-        #Redistribuir 
-        regua = self.redistribuir(regua_macro,alocacoes_restritos)
+        #__redistribuir 
+        regua = self.__redistribuir(regua_macro,alocacoes_restritos)
         regua = regua[regua['percentual_alocacao'] != 0].dropna()
         regua = regua.drop(columns=['book'])
+
+        display(regua)
 
         #Salvar Régua como DataFrame no Sistema de Volumes
         if salva_no_volume:

@@ -1,4 +1,4 @@
-WITH 
+WITH --query para retornar o total de crédito privado aportado em cada fundo
 tab_booksoverview AS (
 
  SELECT
