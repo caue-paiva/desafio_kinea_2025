@@ -1,7 +1,6 @@
 import pandas as pd
 from VerificadorTabelacar import VerificadorTabelacar
 from Otimizacao import otimiza_regua
-from pathlib import Path
 
 def conta_alocacoes_falhas(diferenca_verificador:pd.DataFrame)->int:
     cols_flag_verificacao = ["passou_max_emissor","passou_l_anos","passou_max_pl"]
@@ -87,7 +86,6 @@ def ExecutarOtimizacaoCiclo(logging=False,max_iteracoes_por_ativo:int=-1):
         ativo:str = i.name.split("_")[1].removesuffix(".csv")
         alocacao = pd.read_csv(i.path.removeprefix("dbfs:"))
         df_otimizado = loop_otimizacao(ativo,alocacao, verificador, logging, max_iteracoes_por_ativo) #otimiza a régua até passar em todas as verificações ou pega a melhor régua após max_iteracoes_por_ativo do processo de otimização
-
         if logging:
             print(f"Terminou o Loop de otimizar o ativo {ativo}")
         df_otimizado.to_csv(f"/Volumes/desafio_kinea/boletagem_cp/files/ReguasOtimizadas/REGUA_OTIMIZADA_{ativo}.csv",index=False)
@@ -97,18 +95,18 @@ def ExecutarOtimizacaoInicial():
     Com as réguas iniciais dos ativos de uma dada ordem salvas no volume do desafio /Reguas/, faz a verificacao de acordo com as tabelascar e depois otimizar de acordo com a regua e restrições e
     salvar as reguas otimizadas no diretório X do volume. Essa função realiza a primeira otimização no ciclo de processa uma ordem
     """
-    path_volume_alocacao_trade = Path("/Volumes/desafio_kinea/boletagem_cp/files/Ordem") / Path(f"Alocacao_total_ordem.csv") #path para guardar o CSV do volume de alocação da ordem
-    df_volume_alocacao_trade = pd.read_csv(path_volume_alocacao_trade) #df que diz qual o volume das trades de cada ativo na ordem atual
-
+    ordem = pd.read_csv("/Volumes/desafio_kinea/boletagem_cp/files/Ordem/Ordem.csv")
+    ordem['total'] = ordem['quantidade'] * ordem['preco']
     for i in dbutils.fs.ls("/Volumes/desafio_kinea/boletagem_cp/files/Reguas/"): #para cada regua de ativo nesse path
         ativo:str = i.name.split("_")[1].removesuffix(".csv")
+        valor_trade = ordem[ordem['ativo'] == ativo]['total'].values[0]
         alocacao = pd.read_csv(i.path.removeprefix("dbfs:"))
-        volume_total_ativo_trade:float = df_volume_alocacao_trade[df_volume_alocacao_trade["ativo"] == ativo]["alocacao_total"].iloc[0] #volume total do ativo que será movimentado nas trades da ordem processada
         verificador = VerificadorTabelacar()
-        diferencas = verificador.verifica_alocacao(alocacao,ativo,volume_total_ativo_trade)
-        resultado_otimizado = otimiza_regua(alocacao,diferencas)
+        livres = verificador.verifica_alocacao(alocacao,ativo,valor_trade)
+        resultado_otimizado = otimiza_regua(alocacao,livres)
         df_otimizado =resultado_otimizado[0] 
         df_otimizado.to_csv(f"/Volumes/desafio_kinea/boletagem_cp/files/ReguasOtimizadas/REGUA_OTIMIZADA_{ativo}.csv",index=False)
-
+        df_otimizado['limites'] = livres[['livre_max_pl','livre_emissor','livre_anos']].min(axis=1)
+        display(df_otimizado)
 if __name__ == "__main__":
     ExecutarOtimizacaoInicial()

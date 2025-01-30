@@ -34,7 +34,6 @@ class VerificadorTabelacar:
         for tipo_car,tabelacar in self.__MAPEAMENTO_FUNDOS_TABELACAR.items(): #cria mapeamento tipo_car -> df da tabelacar
             self.__dict_tipocar_para_tabelacar[tipo_car] = spark.sql(f"select * from {tabelacar}").toPandas()
 
-
     def __tabelacar_do_fundo(self,fundo:str)->pd.DataFrame:
         tipo_car :str|None = self.__dict_fundo_tipo_car.get(fundo,None)
         if tipo_car is None:
@@ -98,29 +97,27 @@ class VerificadorTabelacar:
             filter(lambda x: x[0] >= best_level,ratings_dict.items()) #essa equação ou inequação é a principal coisa a se mudar caso precise modificar a lógica
         )
 
-    def __guarda_resultado(self, fundo:str, alocacao_inicial:float, resultado_max_pl:dict[str,float], resultado_emissor_anos:dict[str,float], data_dict:dict )->None:
-            passou_max_pl,passou_max_emissor,passou_l_anos,passou_todos = False,False,False,False
-
-            if resultado_max_pl["diferenca_porcentagem_pl_rating"] >= 0:
-                passou_max_pl = True
-            if resultado_emissor_anos["diferenca_porcentagem_emissor"] >= 0:
-                passou_max_emissor = True
-            if resultado_emissor_anos["diferenca_porcentagem_ano"] >= 0:
-                passou_l_anos = True
-            passou_todos = passou_max_pl and passou_max_emissor and passou_l_anos
-
+    def __guarda_resultado(self, fundo:str, alocacao_ideal:float, resultado_max_pl:float, resultado_emissor_anos:dict[str,float], data_dict:dict )->None:
             data_dict["fundo"].append(fundo)
-            data_dict["valor_alocacao_inicial"].append(alocacao_inicial)
-            data_dict["diferenca_porcentagem_ano"].append(resultado_emissor_anos.get("diferenca_porcentagem_ano", 0))
-            data_dict["diferenca_total_ano"].append(resultado_emissor_anos.get("diferenca_total_ano", 0))
-            data_dict["diferenca_porcentagem_emissor"].append(resultado_emissor_anos.get("diferenca_porcentagem_emissor", 0))
-            data_dict["diferenca_total_emissor"].append(resultado_emissor_anos.get("diferenca_total_emissor", 0))
-            data_dict["diferenca_porcentagem_pl_privado"].append(resultado_max_pl.get("diferenca_porcentagem_pl_rating", 0))
-            data_dict["diferenca_total_pl_privado"].append(resultado_max_pl.get("diferenca_total_pl_rating", 0))
-            data_dict["passou_em_tudo"].append(passou_todos)
-            data_dict["passou_max_pl"].append(passou_max_pl)
-            data_dict["passou_max_emissor"].append(passou_max_emissor)
-            data_dict["passou_l_anos"].append(passou_l_anos)
+            data_dict["alocacao_ideal"].append(alocacao_ideal)
+
+            data_dict["livre_max_pl"].append(resultado_max_pl['livre_pl_rating'])
+            if alocacao_ideal <= resultado_max_pl['livre_pl_rating']:
+                data_dict["passou_max_pl"].append(True) 
+            else:
+                data_dict["passou_max_pl"].append(False)
+
+            data_dict["livre_emissor"].append(resultado_emissor_anos['livre_emissor'])
+            if alocacao_ideal <= resultado_emissor_anos['livre_emissor']:
+                data_dict["passou_emissor"].append(True)
+            else:
+                data_dict["passou_emissor"].append(False)
+
+            data_dict["livre_anos"].append(resultado_emissor_anos['livre_anos'])
+            if alocacao_ideal <= resultado_emissor_anos['livre_anos']:
+                data_dict["passou_anos"].append(True)
+            else:
+                data_dict["passou_anos"].append(False)
 
     def __verificacao_l_anos(self, linha_tabela_car:pd.DataFrame,vencimento_em_anos:int)->float | None:
         """
@@ -158,7 +155,7 @@ class VerificadorTabelacar:
         ratings_igual_ou_abaixo_emissor:dict,
         vencimento_em_anos:int,
         tabela_car_fundo:pd.DataFrame,
-        alocacao_porcen:float,
+        valor_trade:float,
         debug = False
     )->dict[str,float]:
         
@@ -173,7 +170,6 @@ class VerificadorTabelacar:
 
 
         pl_emissor_no_fundo:float = df_pl_por_emissor[(df_pl_por_emissor["Emissor"] ==  emissor_nome) & (df_pl_por_emissor["TradingDesk"] == fundo)]["pl_emissor"].values[0] #valor liquido que o emissor tem naquele fundo para todos os ativos
-        
         pl_emissor_l_anos_fundo:float = df_pl_emissor_l_anos[ (df_pl_emissor_l_anos["Emissor"] ==  emissor_nome) & (df_pl_emissor_l_anos["TradingDesk"] == fundo)]["pl_emissor"].iloc[0] #valor liquido que o emissor tem no fundo, apenas contando ativos que vencem em L ou mais anos
 
     
@@ -181,17 +177,18 @@ class VerificadorTabelacar:
             print(f"Novo Pl total do emissor no fundo: {novo_pl_emissor}, Novo pl do emissor contando apenas ativos com vencimento de {vencimento_em_anos} anos ou mais: {novo_pl_l_anos}")
             print(f"porcentagens maximas pelo emissor: {porcentagem_max_pelo_emissor} e pelo ano: {porcentagem_max_pelo_ano}")
 
-        porcentagem_real_pelo_ano:float =  (pl_emissor_l_anos_fundo / pl_total_fundo) + alocacao_porcen #porcentagem real depois da alocação
-        porcentagem_real_emissor:float =  (pl_emissor_no_fundo / pl_total_fundo) + alocacao_porcen
+        porcentagem_real_pelo_ano:float =  (pl_emissor_l_anos_fundo / pl_total_fundo) 
+        porcentagem_real_emissor:float =  (pl_emissor_no_fundo / pl_total_fundo) 
 
-        return {
-            "diferenca_porcentagem_ano": porcentagem_max_pelo_ano - porcentagem_real_pelo_ano ,
-            "diferenca_total_ano": (porcentagem_max_pelo_ano - porcentagem_real_pelo_ano) * pl_total_fundo,
-            "diferenca_porcentagem_emissor":  porcentagem_max_pelo_emissor - porcentagem_real_emissor,
-            "diferenca_total_emissor": (porcentagem_max_pelo_emissor - porcentagem_real_emissor) * pl_total_fundo,
-        }
+        livre_pl_ano = (porcentagem_max_pelo_ano - porcentagem_real_pelo_ano)*pl_total_fundo
+        livre_pl_emissor = (porcentagem_max_pelo_emissor - porcentagem_real_emissor)*pl_total_fundo
 
-    def __verificacao_max_pl (self, linha_tabela_car:pd.Series, fundo:str, alocacao_porcen: float)->dict[str,float]:
+        livre_ano_porcentagem_trade = livre_pl_ano/valor_trade
+        livre_emissor_porcentagem_trade = livre_pl_emissor/valor_trade
+
+        return { "livre_anos":livre_ano_porcentagem_trade, "livre_emissor":livre_emissor_porcentagem_trade}
+
+    def __verificacao_max_pl (self, linha_tabela_car:pd.Series, fundo:str,valor_trade)->dict[str,float]:
         # TODO TODO TODO TODO !!!!!Pedir para o Rapha mudar nome da coluna p/ IntervaloRating para Tabela Car "Fundos Hibridos"!!!!!!
         if("IntervaloRating" not in linha_tabela_car.columns):
             linha_tabela_car = linha_tabela_car.rename(columns={"RatingKinea":"IntervaloRating"},inplace=False)
@@ -202,35 +199,20 @@ class VerificadorTabelacar:
         pl_total:float = df_pl_fltrado["PL"].values[0] #pl total do fundo
         pl_credito_privado_rating: float = df_pl_fltrado["total_credito_rating"].values[0] #pl de credito pelo rating
 
-
-        porcen_real_credito_privado_rating:float = (pl_credito_privado_rating / pl_total) + alocacao_porcen
+        porcen_real_credito_privado_rating:float = pl_credito_privado_rating / pl_total
         porcen_max_credito_privado_rating: float = linha_tabela_car["MaxPL"].values[0] #porcentagem maxima permitida pela tabelacar
         
-        return {
-            "diferenca_porcentagem_pl_rating": porcen_max_credito_privado_rating - porcen_real_credito_privado_rating,
-            "diferenca_total_pl_rating": (porcen_max_credito_privado_rating - porcen_real_credito_privado_rating) * pl_total,
-            "pl_total_fundo": pl_total
-        }
+        livre_pl_rating = (porcen_max_credito_privado_rating - porcen_real_credito_privado_rating)*pl_total #Quanto tenho livre para aquele rating em crédito privado
 
-    def __percentual_regua_para_percentual_fundo(self,alocacao:pd.DataFrame,ativo:str,volume_alocacao:float):
-        """
-        Dado o percentual da régua, que dita qual a % do volume da trade de um ativo deve ir para cada fundo, transforma essa porcentagem da trade numa porcentagem de alocação (positiva ou negativo) em relação ao PL do fundo alvo
-        """
+        livre_pl_rating_porcentagem_trade = livre_pl_rating/valor_trade #Quanto tenho livre para aquele rating em crédito privado em relação ao valor da trade -> Diretamente comparável com o valor da Ordem
 
-        pl_total_fundos = self.__dados_alocacao.get_pl_total_fundos() #pl de todos os fundo
-        pl_total_fundos = pl_total_fundos.rename({"TradingDesk":"fundo"},axis=1)
+        if livre_pl_rating_porcentagem_trade < 0:
+            livre_pl_rating_porcentagem_trade =  0
 
-        merged_df = alocacao.merge(pl_total_fundos,how="inner",on="fundo") #join com os fundos da alocação
-        merged_df["alocacao_total"] = merged_df["percentual_alocacao"] * volume_alocacao #total alocado para cada fundo = porcentagem por fundo * total alocado na trade
-        merged_df["percentual_alocacao_fundo"] = merged_df["alocacao_total"] / merged_df["PL"] #alocação total que será feita em cada fundo nessa trade, dividida pelo PL total do fundo
-        display(merged_df)
         
-        return merged_df
-       
+        return {"pl_total_fundo":pl_total, "livre_pl_rating":livre_pl_rating_porcentagem_trade}
 
-
-
-    def verifica_alocacao(self,alocacao:pd.DataFrame,ativo:str,volume_alocacao:float)->pd.DataFrame:
+    def verifica_alocacao(self,alocacao:pd.DataFrame,ativo:str,valor_trade:float)->pd.DataFrame:
         """
         Verifica uma alocação de um ativo em diversos fundos (alocação por porcentagem do PL de cada fundo) de acordo com as regras das tabelasCar (Associando o rating do ativo, rating de emissor e anos de vecimento dos ativos com limites de crédito de um fundo).
 
@@ -243,84 +225,58 @@ class VerificadorTabelacar:
         """
         data_dict = {
                 "fundo": [],
-                "valor_alocacao_inicial": [],
-                "diferenca_porcentagem_ano": [],
-                "diferenca_total_ano": [],
-                "diferenca_porcentagem_emissor": [],
-                "diferenca_total_emissor": [],
-                "diferenca_porcentagem_pl_privado": [],
-                "diferenca_total_pl_privado": [],
-                "passou_em_tudo": [],
-                "passou_max_pl": [],
-                "passou_max_emissor": [],
-                "passou_l_anos": []
+                "alocacao_ideal": [],
+                "livre_max_pl":[],
+                "livre_emissor":[],
+                "livre_anos":[],
+                "passou_max_pl":[],
+                "passou_emissor":[],
+                "passou_anos":[]
         }
 
         #o percentual da reǵua é em relação á um trade, precisamos achar o percentual que será alocação em relação ao PL total de cada fundo
-        alocacao_percentual_fundo: pd.DataFrame = self.__percentual_regua_para_percentual_fundo(alocacao,ativo,volume_alocacao)
-
+        #alocacao_percentual_fundo: pd.DataFrame = self.__percentual_regua_para_percentual_fundo(alocacao,ativo,volume_alocacao)
         #Transformando alocação em Dicionário
-        fundos = alocacao_percentual_fundo['fundo']
-        percentual_alocacao = alocacao_percentual_fundo['percentual_alocacao_fundo']
+        fundos = alocacao['fundo']
+        alocacao_ideal = alocacao['percentual_alocacao']      
         alocacao_dict = {
             "fundo": fundos,
-            "percentual_alocacao": percentual_alocacao
+            "alocacao_ideal": alocacao_ideal
         }
 
-
-  
-    
-        df_ativos = self.__dados_alocacao.get_info_rating_ativos() 
         #Pegar dados sobre o ativo,seus rating, o seu emissor e rating do emissor
+        df_ativos = self.__dados_alocacao.get_info_rating_ativos() 
         df_ativo_filtrado = df_ativos[df_ativos["Ativo"] == ativo]
         rating_ativo:str = df_ativo_filtrado["RatingOp"].values[0] 
         rating_emissor:str = df_ativo_filtrado["RatingGrupo"].values[0]
         emissor_nome:str = df_ativo_filtrado["Emissor"].values[0]
         vencimento_anos_ativo:int = int(df_ativo_filtrado["ExpiracaoAnos"].values[0])
+        
         for i,fundo in enumerate(alocacao_dict["fundo"]):
+            
             tabela_car_fundo: pd.DataFrame = self.__tabelacar_do_fundo(fundo)
-            alocacao_valor: float = alocacao_dict["percentual_alocacao"][i] #valor a ser alocado
+            alocacao_ideal: float = alocacao_dict["alocacao_ideal"][i] #valor a ser alocado
+
             ratingOP = df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0]
             ratingGrupo = df_ativos[df_ativos["Ativo"] == ativo]["RatingGrupo"].values[0]
-            ratings_igual_abaixo:dict = self.__get_ratings_igual_abaixo(df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0],
-                                                            tabela_car_fundo)
-            
-            ratings_igual_abaixo_emissor:dict = self.__get_ratings_igual_abaixo(df_ativos[df_ativos["Ativo"] == ativo]["RatingGrupo"].values[0],
-                                                            tabela_car_fundo)
+            ratings_igual_abaixo:dict = self.__get_ratings_igual_abaixo(df_ativos[df_ativos["Ativo"] == ativo]["RatingOp"].values[0],tabela_car_fundo)  
+            ratings_igual_abaixo_emissor:dict = self.__get_ratings_igual_abaixo(df_ativos[df_ativos["Ativo"] == ativo]["RatingGrupo"].values[0],tabela_car_fundo)
     
             # Linha referente ao rating do ativo específico e a tabela car referente ao fundo
             # Pega o maior rating da linha da tabela car relacionada ao ativo. Ex: rating_ativo = Baa3, linha = "Baa1 a Baa4" ->
             # Retornará Baa1. Será utilizado para pegar dos CSV's já salvos com a soma do position de todos os ativos abaixo de Baa1.
             # Caso seja apenas Baa3 no campo de rating da linha da tabela car, será pego o CSV relacionado à esse rating + os ativos abaixo 
-            linha_tabela_car_ativo:pd.DataFrame = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_abaixo.keys()))] #df de uma linha
-            resultado_max_pl = self.__verificacao_max_pl(
-                linha_tabela_car_ativo,fundo,alocacao_valor
-            )
-            pl_total_fundo :float = resultado_max_pl["pl_total_fundo"]
-            resultado_emissor_e_ano = self.__verificacao_emissor_e_l_anos(
-                emissor_nome,fundo,pl_total_fundo,ratings_igual_abaixo_emissor,vencimento_anos_ativo,tabela_car_fundo,alocacao_valor
-            )
-            self.__guarda_resultado(fundo, alocacao_valor,resultado_max_pl,resultado_emissor_e_ano,data_dict) #append dos resultados no dict do resultado final
 
-            # Variável fundo_porcentagem_pl_cred_priv poderá fazer a validação relacionada ao maxPL da tabela car da variável tabela_car_fundo
-            # Variável pl_emissor_no_fundo poderá fazer a validação relacionada ao maxEmissor na da tabela car da variável tabela_car_fundo
-            # TODO: Fazer validação se há as colunas de anos, e fazer a validação deles, caso seja válido. (Não lembro se era para substituir a validação de maxPL ou maxEmissor por essa de anos, ou se é uma validação à parte).
-            # TODO: Gerar o output da forma que Sarah e João querem (fundo | excedente) (será em porcentagem? será que não deveriamos estar fazendo por quantidade de cotas excedentes? ou pela quantidade de PL excedente?) 
+            linha_tabela_car_ativo:pd.DataFrame = tabela_car_fundo[tabela_car_fundo["Nivel"] == int(min(ratings_igual_abaixo.keys()))] #df de uma linha
+
+            resultado_max_pl = self.__verificacao_max_pl(linha_tabela_car_ativo,fundo,valor_trade)
+
+            pl_total_fundo :float = resultado_max_pl["pl_total_fundo"]
+
+            resultado_emissor_e_ano = self.__verificacao_emissor_e_l_anos(emissor_nome,fundo,pl_total_fundo,ratings_igual_abaixo_emissor,vencimento_anos_ativo,tabela_car_fundo,valor_trade)
+            
+            self.__guarda_resultado(fundo, alocacao_ideal,resultado_max_pl,resultado_emissor_e_ano,data_dict) #append dos resultados no dict do resultado final
+
 
         df_final = pd.DataFrame(data_dict) #transforma o dict do resultado final em um Dataframe
         return df_final
-
-
-if __name__ == "__main__":
-    verificador = VerificadorTabelacar()
-    ativo = 'ENMTA4'
-    fundo_dist_regua = {
-        'fundo': ['RFA', 'APO', 'ID2'],
-        'percentual_alocacao': [sum([0.4753, 0.2623, 0.3275]),
-                sum([0.1017, 0.3478, 0.1845]),
-                sum([0.4230, 0.3899, 0.4879])]
-    }
-
-    df = pd.DataFrame(fundo_dist_regua)
-    resultado_df = verificador.verifica_alocacao(df,ativo,1982127.1)
-    display(resultado_df)

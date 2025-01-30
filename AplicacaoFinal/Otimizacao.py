@@ -4,22 +4,22 @@ import pandas as pd
 from VerificadorTabelacar import VerificadorTabelacar
 
 
-def otimiza_regua(regua_ideal:pd.DataFrame, diferencas:pd.DataFrame)->tuple[pd.DataFrame,float]:
+def otimiza_regua(regua_ideal:pd.DataFrame, livres:pd.DataFrame)->tuple[pd.DataFrame,float]:
     """
     Dado uma DF régua ideal de alocação de um ativo em vários fundos e um DF diferenças que dita qual a diferença entre a alocação ideal vs as restrições  das tabelasCar (negativo que dizer acima do possível), 
     otimiza a regua ideia de acordo com as diferenças, de forma a ter a melhor alocação possível dentro das regras.
     Args:
         regua_ideal (pd.DataFrame): DF com as alocações ideais de cada fundo
-        diferencas (pd.DataFrame): DF com as diferenças entre a alocação ideal e a alocação real, com uma diferença negativa (real ou porcentagem) ditando que a alocação passou do limite de certa verificação da tabelacar
+        livres (pd.DataFrame): DF com o máximo possível que uma alocação poderia ter em relação a ordem
     Return:
         (tuple[pd.DataFrame,float]): tupla com o DF da régua otimizada e o erro da otimização
     """
     #Inicia uma Régua com os valores distribuidos uniformemente entre os fundos
     x0 = np.array([1/len(regua_ideal)] * len(regua_ideal))
 
-    #Calculando Limite Máximo de Cada Fundo
-    #limites_maximos =regua_ideal['percentual_alocacao'] + diferencas[['diferenca_porcentagem_ano','diferenca_porcentagem_emissor','diferenca_porcentagem_pl_privado']].min(axis=1)
-    limites_maximos =regua_ideal['percentual_alocacao'] + regua_ideal['percentual_alocacao'] * diferencas[['diferenca_porcentagem_ano','diferenca_porcentagem_emissor','diferenca_porcentagem_pl_privado']].min(axis=1)
+    #Seleciona o Máximo que a alocação pode alcançar sem quebrar nenhuma regra
+    limites_maximos = livres[['livre_max_pl','livre_emissor','livre_anos']].min(axis=1) 
+    #Selecionamos o minimo pois cada coluna contém quantos % da ordem poderia ser alocado sem quebrar uma restrição
 
     #Adicionando Bounds
     bounds = []
@@ -31,27 +31,13 @@ def otimiza_regua(regua_ideal:pd.DataFrame, diferencas:pd.DataFrame)->tuple[pd.D
         y = np.abs(x -regua_ideal['percentual_alocacao']).sum()
         return y
     
-    #Restrição para Limite Máximo
-    def limite_maximo(x, i, limite):
-        #print(f"Verificando restrição para i={i}: limite={l}, valor atual={x[i]}")
-        return limite - x[i]
-    
     #Restrição Soma das Alocações Igual a 1
     def soma_1(x):
-        print(sum(x))
         return sum(x) - 1
-
-    #Restrição para cada alocação ser maior ou igual a 0
-    def alocacao_maiorque_0(x,i): 
-        return x[i]
     
     #Lista com Restrições
     constraints = []
-    #constraints.append({'type': 'eq', 'fun': lambda x: soma_1(x)})
-    for i in range(len(x0)):
-        limite = limites_maximos[i]
-        #constraints.append({'type': 'ineq', 'fun': lambda x,i=i: alocacao_maiorque_0(x,i)})
-        constraints.append({'type':'ineq','fun':lambda x,i=i:limite_maximo(x,i,limites_maximos[i])})
+    constraints.append({'type': 'eq', 'fun': lambda x: soma_1(x)})
 
     #Resolver o problema de minimização
     minimizador = scipy.optimize.minimize(
@@ -61,10 +47,9 @@ def otimiza_regua(regua_ideal:pd.DataFrame, diferencas:pd.DataFrame)->tuple[pd.D
         constraints=constraints,
         bounds= bounds,
         method='SLSQP',
-        options={'maxiter': 100000,'disp':True}
+        options={'maxiter': 100000,'disp':False}
     )    
 
-    print(minimizador.success)
     erro = minimizador.fun
     regua_otimizada = minimizador.x
 
