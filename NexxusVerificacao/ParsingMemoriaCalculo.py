@@ -92,7 +92,7 @@ def get_desenquadramento_rating(text:str)->list[dict]:
                     "ativo":ativo,
                     "pior_rating_permitido": int(numeros_linha[0]), #maior número == pior rating
                     "rating do ativo": int(numeros_linha[1]),
-                    "posicao_ativo": float(numeros_linha[0])
+                    "posicao_ativo": float(numeros_linha[2].replace(".",""))
                 }
             )
         else:
@@ -738,6 +738,7 @@ DEBN UNEG11          DEBN UNEG11                            1.187.874,75       0
         
         """
 
+    #display(tabela_texto_memoria_para_df(txt))
     print(get_desenquadramento_rating(txt))
     #df = tabela_texto_memoria_para_df(txt)
      # display(df)
