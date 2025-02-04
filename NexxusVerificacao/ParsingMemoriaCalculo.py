@@ -1,5 +1,6 @@
 from io import StringIO
 import pandas as pd
+from itertools import groupby
 
 
 def __chega_final_texto(texto_memoria:str)->str:
@@ -13,7 +14,7 @@ def __chega_final_texto(texto_memoria:str)->str:
     return apenas_linhas_dados
 
 
-def texto_memoria_para_df(texto:str)->pd.DataFrame:
+def tabela_texto_memoria_para_df(texto:str)->pd.DataFrame:
   
     final_texto = __chega_final_texto(texto).strip() #chega no final da string, onde tem as colunas de dados da memória
     #print(final_texto)
@@ -52,9 +53,55 @@ def texto_memoria_para_df(texto:str)->pd.DataFrame:
         print("The dataset is empty.")
 
 
+def get_desenquadramento_rating(text:str)->list[dict]:
+    """
+    Dado a string da memória de cálculo, faz o loop pelo veredito de cada ativo na alocação e retorna uma lista de dicts para os ativos desenquadrados, para cada dict temos o nome do ativo,
+    o pior rating permitido no fundo, o rating do ativo e a posição dele no fundo como chaves.
+
+    Args:
+        text (str): texto do cálculo de memória
+    
+    Return:
+        list[dict]: lista de dicts com os ativos desenquadrados, caada ativo com seu dict e informações mencionadas anteriormente.
+    """
+    split_por_ativo = text.split("TITULO:")[1:] #separa por análise de cada ativo
+    ultima_chunk = split_por_ativo[-1]
+    split_por_ativo[-1] = ultima_chunk[:ultima_chunk.find("MEMÓRIA DE CÁLCULO (PROCESSAMENTO)")] #ultima chunk tem a tabela dos dados, vamos tirar ela
+    resultado_desenquadramento = []    #lista de dicts
+    
+    for i,chunk in enumerate(split_por_ativo): #loop pelos vereditos individuais para cada ativo 
+        icomeco_ativo = chunk.find("DEBN") + 4
+        ifinal_ativo = chunk.find("/")
+        ativo = chunk[icomeco_ativo:ifinal_ativo].strip()
+        comeco_string_veredito = chunk.find("[")
+        veredito = chunk[comeco_string_veredito:].strip()
+      
+        if "DESCONSIDERADO"  not in veredito: #ativo desequadrou
+            #print(veredito + " ---- "+ str(i))
+            #print(ativo)
+            pior_rating_agencia = None
+            rating_ativo = None
+            numeros_linha = []
+            for  eh_numero,grupo in groupby(veredito, key=lambda x: x.isnumeric() or x == "." or x == ","): #agrupa substrs da linha entre as de números e as que n são numeros
+                if eh_numero:
+                    numeros_linha.append("".join(grupo))
+            
+            #print(numeros_linha)
+            resultado_desenquadramento.append(
+                {
+                    "ativo":ativo,
+                    "pior_rating_permitido": int(numeros_linha[0]), #maior número == pior rating
+                    "rating do ativo": int(numeros_linha[1]),
+                    "posicao_ativo": float(numeros_linha[0])
+                }
+            )
+        else:
+            continue
+    
+    return resultado_desenquadramento
+
 if __name__ == "__main__":
-    df = texto_memoria_para_df(
-        """
+    txt =         """
         
         
         TITULO: DEBN TJMM11 / EMISSOR: TJMM
@@ -690,7 +737,8 @@ DEBN UNEG11          DEBN UNEG11                            1.187.874,75       0
 
         
         """
-    )
 
-    display(df)
+    print(get_desenquadramento_rating(txt))
+    #df = tabela_texto_memoria_para_df(txt)
+     # display(df)
 
