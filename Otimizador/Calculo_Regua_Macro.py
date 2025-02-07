@@ -3,7 +3,7 @@ import pandas as pd
 from typing import List
 import os
 from pathlib import Path
-from ..VerificadorAlocacao import DadosAlocacao
+from VerificadorAlocacao import DadosAlocacao
 #Funções Auxiliares
 #Funções Intermédiarias da Função Principal
 def query(arquivo:str) -> pd.DataFrame:
