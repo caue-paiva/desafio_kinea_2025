@@ -2,8 +2,6 @@ import numpy as np
 import scipy
 import pandas as pd
 from VerificadorTabelacar import VerificadorTabelacar
-
-
 def otimiza_regua(regua_ideal:pd.DataFrame, livres:pd.DataFrame)->tuple[pd.DataFrame,float]:
     """
     Dado uma DF régua ideal de alocação de um ativo em vários fundos e um DF diferenças que dita qual a diferença entre a alocação ideal vs as restrições  das tabelasCar (negativo que dizer acima do possível), 
