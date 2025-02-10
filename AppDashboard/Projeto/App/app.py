@@ -26,25 +26,25 @@ class TelaFases:
         """
         return st.session_state.mock_regua
 
-   def get_status_nexxus(self) -> Literal['enquadrado', 'desenquadrado', 'esperando_input','calculando']:
+   def get_status_nexxus(self) -> Literal['enquadrado', 'desenquadrado', 'esperando']:
         """
         Retorna o status do nexxus (mock), de dentro do session_state.
         """
         return st.session_state.mock_nexxus_status
 
    def get_backend_status(self):
-         """
+        """
          Monta o dicionário de status de cada fase do processo, baseando-se
          nos retornos das funções internas (get_status_regua / get_status_nexxus)
          e em possíveis ações (ex: timeout).
-         """
-         status_data = {
+        """
+        status_data = {
             "regua_inicial": {
                 "status": "",         
                 "csv_disponivel": False
             },
             "nexxus": {
-                "status": "parado", #nexxus por padrão está parado, esperando a régua
+                "status": "esperando", #nexxus por padrão está  esperando (ou a régua ou o resultado do enquadramento)
                 "csv_disponivel": False
             },
             "final": {
@@ -59,67 +59,46 @@ class TelaFases:
         }
 
          #verifica status da régua otimizada
-         status_regua = self.get_status_regua()
-         if status_regua:
-            # Se a régua otimizada está disponível
+        status_regua = self.get_status_regua()
+        if status_regua:
+            # Régua otimizada está disponível
             status_data["regua_inicial"]["status"] = "pronta"
             status_data["regua_inicial"]["csv_disponivel"] = True
-
-                 
-         
-            #status do nexxus (só faz sentido atualizar se a régua estiver disponível)
-            status_nexxus = self.get_status_nexxus()
-            if status_nexxus == 'parado':
-               # nexus tava parado, agora ele está ativo
-               self.__timer_nexus = datetime.now() 
-               status_data["nexxus"]["status"] = 'esperando_input'
-            
-            
-            
-            elif status_nexxus == 'esperando_input' or status_nexxus == 'calculando': #verificação do nexxus n terminou
-            
-               # Se ainda está calculando, podemos verificar se atingiu timeout
-               tempo_decorrido = datetime.now() - self.__timer_nexus
-               if tempo_decorrido >= self.__TIMEOUT_NEXUS:
-                  # Bateu no timeout
-                  status_data["nexxus"]["status"] = "timeout"
-                  """TODO implementar mais lógica do timeout"""
-                  status_data["logs"].append("Timeout no nexxus após 5 minutos de espera.")
-               else:
-                  # Ainda não expirou o timeout, então “aguardando_resultado”
-                  status_data["nexxus"]["status"] = status_nexxus #staus do nexxus é esperando input ou calculando
-
-            elif status_nexxus == 'enquadrado':
-               # Se o nexxus está enquadrado (ex.: “sucesso”)
-               status_data["nexxus"]["status"] = "enquadrado"
-               status_data["nexxus"]["csv_disponivel"] = True
-               status_data["logs"].append("nexxus concluído com status 'enquadrado'.")
-
-            elif status_nexxus == 'desenquadrado':
-               # Se o nexxus está desenquadrado (ex.: “falha”)
-               status_data["nexxus"]["status"] = "desenquadrado"
-               status_data["nexxus"]["csv_disponivel"] = False
-               status_data["logs"].append("nexxus concluído com status 'desenquadrado'.")
-
-
-               status_data["regua_inicial"]["status"] = "processando" #desenquadrou no nexxus, precisamos recalcular régua
-               status_data["regua_inicial"]["csv_disponivel"] = False
-
-         else:
-            # Reǵua não está disponível,
+            self.__timer_nexus = datetime.now()
+        else:
+            # Ainda  Calculando régua 
             status_data["regua_inicial"]["status"] = "processando"
             status_data["regua_inicial"]["csv_disponivel"] = False
-            
-            self.__timer_nexus = None # não tem régua pronta
-
+            self.__timer_nexus = None
+            status_data["nexxus"]["status"] = "esperando" #nexxus está esperando a régua
          
-         #verificação se o processo todo teve sucesso (nexxus enquadrou)
-         if status_data["nexxus"]["status"] == "enquadrado":
-            status_data["final"]["status"] = "concluido"
-            status_data["final"]["csv_disponivel"] = True
-            status_data["logs"].append("Processo final concluído com sucesso!")
 
-         return status_data
+        status_nexxus = self.get_status_nexxus() #status do nexxus
+        if status_nexxus == "esperando"  and self.__timer_nexus is not None:
+            tempo_decorrido = datetime.now() - self.__timer_nexus
+            if tempo_decorrido >= self.__TIMEOUT_NEXUS:
+                # Bateu no timeout
+                status_data["nexxus"]["status"] = "timeout"
+                # Aqui você pode implementar a lógica de erro, logs adicionais, etc.
+                status_data["logs"].append("Timeout no nexxus após 15 minutos de espera.")
+            else:
+                status_data["nexxus"]["status"] = "esperando_resultado"
+   
+        elif status_nexxus == 'enquadrado':
+            # Se o nexxus está enquadrado (ex.: “sucesso”)
+            status_data["nexxus"]["status"] = "enquadrado"
+            status_data["nexxus"]["csv_disponivel"] = True
+            status_data["logs"].append("nexxus concluído com status 'enquadrado'.")
+
+        elif status_nexxus == 'desenquadrado':
+            # Se o nexxus está desenquadrado (ex.: “falha”)
+            status_data["nexxus"]["status"] = "desenquadrado"
+            status_data["nexxus"]["csv_disponivel"] = False
+            status_data["logs"].append("nexxus concluído com status 'desenquadrado'.")
+
+
+        
+        return status_data
 
    # ------------------------------------------------------------------------------
    # Função principal do Streamlit
