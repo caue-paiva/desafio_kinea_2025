@@ -47,10 +47,6 @@ class TelaFases:
                 "status": "esperando", #nexxus por padrão está  esperando (ou a régua ou o resultado do enquadramento)
                 "csv_disponivel": False
             },
-            "final": {
-                "status": "aguardando",   # Exemplo: assumimos que só passa para 'concluido' depois.
-                "csv_disponivel": False
-            },
             "logs": [
                 "Log 1: Processo iniciado às 10:00",
                 "Log 2: Régua inicial concluída às 10:05",
@@ -60,6 +56,7 @@ class TelaFases:
 
          #verifica status da régua otimizada
         status_regua = self.get_status_regua()
+        print(status_regua)
         if status_regua:
             # Régua otimizada está disponível
             status_data["regua_inicial"]["status"] = "pronta"
@@ -67,10 +64,14 @@ class TelaFases:
             self.__timer_nexus = datetime.now()
         else:
             # Ainda  Calculando régua 
+            print("calulando régua")
             status_data["regua_inicial"]["status"] = "processando"
             status_data["regua_inicial"]["csv_disponivel"] = False
             self.__timer_nexus = None
             status_data["nexxus"]["status"] = "esperando" #nexxus está esperando a régua
+            if st.session_state.mock_nexxus_status  == 'desenquadrado':
+                time.sleep(2)
+                st.session_state.mock_nexxus_status = "esperando"
          
 
         status_nexxus = self.get_status_nexxus() #status do nexxus
@@ -81,8 +82,6 @@ class TelaFases:
                 status_data["nexxus"]["status"] = "timeout"
                 # Aqui você pode implementar a lógica de erro, logs adicionais, etc.
                 status_data["logs"].append("Timeout no nexxus após 15 minutos de espera.")
-            else:
-                status_data["nexxus"]["status"] = "esperando_resultado"
    
         elif status_nexxus == 'enquadrado':
             # Se o nexxus está enquadrado (ex.: “sucesso”)
@@ -95,7 +94,6 @@ class TelaFases:
             status_data["nexxus"]["status"] = "desenquadrado"
             status_data["nexxus"]["csv_disponivel"] = False
             status_data["logs"].append("nexxus concluído com status 'desenquadrado'.")
-
 
         
         return status_data
@@ -178,10 +176,11 @@ class TelaFases:
             st.header("nexxus")
             
             nexclus_status = status_data["nexxus"]["status"]
+            print("status nexxus: ", nexclus_status)
             csv_nexclus_disponivel = status_data["nexxus"]["csv_disponivel"]
             
-            if nexclus_status == "esperando_resultado":
-                st.warning("Aguardando resultado do processamento...")
+            if nexclus_status == "esperando":
+                st.warning("Aguardando input de régua ou calculo...")
             elif nexclus_status == "sucesso":
                 st.success("Processo concluído com sucesso!")
                 if csv_nexclus_disponivel:
@@ -191,19 +190,10 @@ class TelaFases:
                     st.info("CSV de nexxus não disponível no momento.")
             elif nexclus_status == "enquadrado":
                 st.success("nexxus enquadrado!")
-                if csv_nexclus_disponivel:
-                    if st.button("Baixar CSV - nexxus"):
-                        st.write("Lógica de download do CSV do nexxus aqui...")
-                else:
-                    st.info("CSV de nexxus não disponível no momento.")
             elif nexclus_status == "desenquadrado":
                 st.error("nexxus desenquadrado!")
             elif nexclus_status == "timeout":
                 st.error("nexxus em TIMEOUT! Processo demorou além do limite.")
-            elif nexclus_status == "recalcula_regua":
-                st.info("Necessário recalcular a Régua.")
-                if st.button("Recalcular Régua"):
-                    st.write("Lógica para solicitar recalcular a régua (chamada backend).")
             else:
                 st.write(f"Status: {nexclus_status}")
 
@@ -213,30 +203,15 @@ class TelaFases:
         with col_final:
             st.header("Final")
             
-            final_status = status_data["final"]["status"]
-            csv_final_disponivel = status_data["final"]["csv_disponivel"]
+        
             
-            if final_status == "concluido":
+            if nexclus_status == "enquadrado" and regua_status == "pronta":
                 st.success("Processo final concluído!")
-                if csv_final_disponivel:
-                    if st.button("Baixar CSV - Etapa Final"):
-                        st.write("Lógica de download do CSV final aqui...")
-                else:
-                    st.warning("CSV final não disponível no momento.")
-            elif final_status == "aguardando":
-                st.warning("Aguardando conclusão das etapas anteriores...")
-            else:
-                st.write(f"Status: {final_status}")
+                if st.button("Baixar CSV - Ordem final"):
+                    st.write("Lógica de download do CSV do nexxus aqui...")
 
-        # ----------------------------------------------------------------------
-        # Exibir logs recentes
-        # ----------------------------------------------------------------------
-        st.subheader("Ver últimos logs")
-        if "logs" in status_data and status_data["logs"]:
-            for log in status_data["logs"]:
-                st.text(log)
-        else:
-            st.write("Nenhum log disponível.")
+            else:
+                st.warning("Aguardando conclusão das etapas anteriores...")
 
 
 if __name__ == "__main__":
