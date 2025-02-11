@@ -1,13 +1,13 @@
 import streamlit as st
 import csv, ast
 import pandas as pd
-from streamlit_autorefresh import st_autorefresh
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+
 @dataclass
-class Log:
+class LogNexxus:
    data: datetime
    regra:str
    fundo:str
@@ -20,9 +20,8 @@ class Log:
    
 
 
-import streamlit as st
 
-def get_logs(depois_do_tempo:datetime | None = None)->list[Log]:
+def get_logs(depois_do_tempo:datetime | None = None)->list[LogNexxus]:
     """
     Função que retorna lista de logs. 
     Neste exemplo, estamos lendo do session_state para fins de demonstração.
@@ -48,8 +47,8 @@ def get_logs(depois_do_tempo:datetime | None = None)->list[Log]:
                 # Safely convert the Python-like list string into a real list
                 ativos_list = ast.literal_eval(row["ativos_desenquadrados"])
                 
-                # Build the Log object
-                log_obj = Log(
+                # Build the LogNexxus object
+                log_obj = LogNexxus(
                     data=row_datetime,
                     regra=row["regra"],
                     fundo=row["fundo"],
@@ -66,7 +65,7 @@ def get_logs(depois_do_tempo:datetime | None = None)->list[Log]:
 
 def main():
     st.set_page_config(layout="wide")
-    st.title("Logs do Sistema")
+    st.title("Logs do Nexxus")
 
     logs = get_logs()
 
@@ -90,14 +89,38 @@ def main():
 
     # Create a DataFrame from these dictionaries
     df = pd.DataFrame(logs_dicts)
+    df["data"] = df["data"].astype('datetime64[ns]')
 
-    st.subheader("Tabela de Logs")
+    min_date = df["data"].min().date()  # earliest date
+    max_date = df["data"].max().date()  # latest date
 
-    # You can display as a static table:
-    st.table(df)
+    start_date = st.sidebar.date_input("Data inicial", value=min_date)
+    end_date   = st.sidebar.date_input("Data final",   value=max_date)
+    
+    if start_date is None: #caso em que o user n escreve nenhuma data
+        start_date = min_date
+    if end_date is None:
+        end_date = max_date
 
-    # Or an interactive table with sorting and filtering:
-    # st.dataframe(df, use_container_width=True)
+    # If user picks the same date for both, treat it as "that single day."
+    if start_date == end_date:
+        st.write(f"Exibindo registros **somente** do dia: {start_date}")
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt   = datetime.combine(end_date,   datetime.max.time())
+    else:
+        # Normal range filter
+        st.write(f"Exibindo registros de **{start_date}** até **{end_date}**")
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt   = datetime.combine(end_date,   datetime.max.time())
+
+    #filtra df pelas datas
+    mask = (df["data"] >= start_dt) & (df["data"] <= end_dt)
+    df_filtered = df[mask].copy()
+
+    st.subheader("Logs Filtrados")
+    st.dataframe(df_filtered, use_container_width=True, height=400)
+
+
 
 if __name__ == "__main__":
     main()
