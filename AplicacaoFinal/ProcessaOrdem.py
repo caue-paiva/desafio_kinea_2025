@@ -11,12 +11,12 @@ class ProcessaOrdem:
     """
     def __init__(self): 
         self.input_path = Path("/Volumes/desafio_kinea/boletagem_cp/files/Ordem/Ordem.csv")
-        self.ordem = pd.read_csv(self.input_path)
-
+        self.ordem = pd.read_csv(self.input_path,sep="\t")
+        self.ordem['qtde'] = self.ordem['qtde'].str.replace(",","").astype(float)
     def __get_alocacao_total_por_ativo(self)->pd.DataFrame:
         df = self.ordem
-        df["alocacao_total"] = df["quantidade"] * df["preco"]
-        df_agrupado = df.groupby("ativo").sum().reset_index()
+        df["alocacao_total"] = df["qtde"] * df["preco"]
+        df_agrupado = df.groupby("ticker").sum().reset_index()
         display(df_agrupado)
         return df_agrupado
         
@@ -29,7 +29,7 @@ class ProcessaOrdem:
         #calculaa régua para cada arquivo da ordem
         for index, row in self.ordem.iterrows():
             regua = ReguaMacro()
-            regua.calcula_regua(row["ativo"],True) #calcula régua e salva no volume
+            regua.calcula_regua(row["ticker"],row['book'],True) #calcula régua e salva no volume
 
 if __name__ == "__main__":
     ordem = ProcessaOrdem()

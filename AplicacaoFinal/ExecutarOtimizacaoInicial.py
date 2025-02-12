@@ -95,11 +95,12 @@ def ExecutarOtimizacaoInicial():
     Com as réguas iniciais dos ativos de uma dada ordem salvas no volume do desafio /Reguas/, faz a verificacao de acordo com as tabelascar e depois otimizar de acordo com a regua e restrições e
     salvar as reguas otimizadas no diretório X do volume. Essa função realiza a primeira otimização no ciclo de processa uma ordem
     """
-    ordem = pd.read_csv("/Volumes/desafio_kinea/boletagem_cp/files/Ordem/Ordem.csv")
-    ordem['total'] = ordem['quantidade'] * ordem['preco']
+    ordem = pd.read_csv("/Volumes/desafio_kinea/boletagem_cp/files/Ordem/Ordem.csv",sep="\t")
+    ordem['qtde'] =  ordem['qtde'].str.replace(",","").astype(float)
+    ordem['total'] = ordem['qtde'] * ordem['preco']
     for i in dbutils.fs.ls("/Volumes/desafio_kinea/boletagem_cp/files/Reguas/"): #para cada regua de ativo nesse path
         ativo:str = i.name.split("_")[1].removesuffix(".csv")
-        valor_trade = ordem[ordem['ativo'] == ativo]['total'].values[0]
+        valor_trade = ordem[ordem['ticker'] == ativo]['total'].values[0]
         alocacao = pd.read_csv(i.path.removeprefix("dbfs:"))
         verificador = VerificadorTabelacar()
         livres = verificador.verifica_alocacao(alocacao,ativo,valor_trade)
@@ -108,5 +109,6 @@ def ExecutarOtimizacaoInicial():
         df_otimizado.to_csv(f"/Volumes/desafio_kinea/boletagem_cp/files/ReguasOtimizadas/REGUA_OTIMIZADA_{ativo}.csv",index=False)
         df_otimizado['limites'] = livres[['livre_max_pl','livre_emissor','livre_anos']].min(axis=1)
         display(df_otimizado)
+    
 if __name__ == "__main__":
     ExecutarOtimizacaoInicial()

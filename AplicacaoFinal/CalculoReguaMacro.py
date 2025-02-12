@@ -133,8 +133,8 @@ class ReguaMacro:
         
         restricoes_book_micro = restricoes_book_micro[restricoes_book_micro['book_micro'] == book_ativo]
         restricoes_book_micro = restricoes_book_micro.merge(regua_macro,on='fundo')
-        fundo_restrito = restricoes_fundo_restrito[restricoes_fundo_restrito['ativo'] == ativo]['fundo_restrito'].values[0]
-
+        fundo_restrito = restricoes_fundo_restrito[restricoes_fundo_restrito['ativo'] == ativo]['fundo_restrito'].values[0] Ativos não cadastrados estão dando problema
+        #fundo_restrito = None Pra caso o ativo não esteja cadastrado
         restricoes = regua_macro[regua_macro['fundo'] == fundo_restrito]
         restricoes = pd.concat([restricoes,restricoes_book_micro[restricoes_book_micro['flag'] == False]], axis=0).drop(columns=['book','book_micro','flag'])
 
@@ -146,7 +146,7 @@ class ReguaMacro:
         regua_macro['percentual_alocacao'] = fundos_nao_restritos['percentual_alocacao'] + excedente_distribuido
         return regua_macro
 
-    def calcula_regua(self,ativo:str, salva_no_volume:bool = False)->pd.DataFrame:
+    def calcula_regua(self,ativo:str,book_ativo: str = None,salva_no_volume:bool = False)->pd.DataFrame:
         #Buscar  Informações
         dataframes = self.__extrair_informacoes()
         inf_fundos = dataframes[0]
@@ -157,7 +157,8 @@ class ReguaMacro:
         #pl_total = dataframes[6]
 
         #Qual o book referente ao ativo da ordem
-        book_ativo = book_ativos[book_ativos['ativo'] == ativo]['book_micro'].values[0]
+        
+        #'''book_ativo = book_ativos[book_ativos['ativo'] == ativo]['book_micro'].values[0]
         book_macro = self.__encontrar_book_macro(book_ativo)
 
         #Calcular a Régua Book Macro 
@@ -173,8 +174,6 @@ class ReguaMacro:
         regua = self.__redistribuir(regua_macro,alocacoes_restritos)
         regua = regua[regua['percentual_alocacao'] != 0].dropna()
         regua = regua.drop(columns=['book'])
-
-        display(regua)
 
         #Salvar Régua como DataFrame no Sistema de Volumes
         if salva_no_volume:
