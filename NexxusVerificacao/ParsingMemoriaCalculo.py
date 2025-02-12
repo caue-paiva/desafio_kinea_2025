@@ -3896,7 +3896,7 @@ DEBN CSAN24_052032   DEBN CSAN24 I373524                       24.071,36       0
     #display(tabela_texto_memoria_para_df(txt))
     #print(agrupa_ativos(txt))
     df = tabela_texto_memoria_para_df(txt)
-    print(df['NOME'].unique())
+    print(df.display())
 
     
 
