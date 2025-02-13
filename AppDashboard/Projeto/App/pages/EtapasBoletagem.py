@@ -39,7 +39,7 @@ class TelaFases:
          e em possíveis ações (ex: timeout).
         """
         status_data = {
-            "regua_inicial": {
+            "regua_otimizada": {
                 "status": "",         
                 "csv_disponivel": False
             },
@@ -49,7 +49,7 @@ class TelaFases:
             },
             "logs": [
                 "Log 1: Processo iniciado às 10:00",
-                "Log 2: Régua inicial concluída às 10:05",
+                "Log 2: Régua Otimizada concluída às 10:05",
                 "Log 3: nexxus em processamento às 10:06",
             ]
         }
@@ -59,14 +59,14 @@ class TelaFases:
         print(status_regua)
         if status_regua:
             # Régua otimizada está disponível
-            status_data["regua_inicial"]["status"] = "pronta"
-            status_data["regua_inicial"]["csv_disponivel"] = True
+            status_data["regua_otimizada"]["status"] = "pronta"
+            status_data["regua_otimizada"]["csv_disponivel"] = True
             self.__timer_nexus = datetime.now()
         else:
             # Ainda  Calculando régua 
             print("calulando régua")
-            status_data["regua_inicial"]["status"] = "processando"
-            status_data["regua_inicial"]["csv_disponivel"] = False
+            status_data["regua_otimizada"]["status"] = "processando"
+            status_data["regua_otimizada"]["csv_disponivel"] = False
             self.__timer_nexus = None
             status_data["nexxus"]["status"] = "esperando" #nexxus está esperando a régua
             if st.session_state.mock_nexxus_status  == 'desenquadrado':
@@ -142,22 +142,22 @@ class TelaFases:
         status_data = self.get_backend_status()
 
         # Monta a interface com 3 colunas, cada uma representando uma fase
-        col_regua_inicial, col_nexclus, col_final = st.columns(3)
+        col_regua_otimizada, col_nexclus, col_final = st.columns(3)
 
         # ----------------------------------------------------------------------
         # Coluna da “Régua Inicial”
         # ----------------------------------------------------------------------
-        with col_regua_inicial:
-            st.header("Régua Inicial")
+        with col_regua_otimizada:
+            st.header("Régua Otimizada")
             
-            regua_status = status_data["regua_inicial"]["status"]
-            csv_regua_disponivel = status_data["regua_inicial"]["csv_disponivel"]
+            regua_status = status_data["regua_otimizada"]["status"]
+            csv_regua_disponivel = status_data["regua_otimizada"]["csv_disponivel"]
             
             if regua_status == "pronta":
                 st.success("Status: Régua Pronta")
                 if csv_regua_disponivel:
                     st.info("CSV disponível para download.")
-                    if st.button("Baixar CSV - Régua Inicial"):
+                    if st.button("Baixar CSV - Régua Otimizada"):
                         st.write("Lógica de download do CSV aqui...")
                 else:
                     st.warning("CSV ainda não está disponível.")
@@ -202,29 +202,31 @@ class TelaFases:
         # ----------------------------------------------------------------------
         with col_final:
             st.header("Final")
-            
-        
-            
             if nexclus_status == "enquadrado" and regua_status == "pronta":
                 st.success("Processo final concluído!")
                 if st.button("Baixar CSV - Ordem final"):
+                    st.write("Baixando CSV, a aplicação será resetada para seu estado inicial")
                     st.write("Lógica de download do CSV do nexxus aqui...")
+                    
+                    st.session_state.clear() #limpa o esta da aplicação
+                    time.sleep(3) 
+                    st.switch_page("app.py")
+                    time.sleep(1.5) 
+                    st.rerun()  # Recarrega a aplicação
+
 
             else:
                 st.warning("Aguardando conclusão das etapas anteriores...")
 
 
-def tela_nao_liberada():
-    pass
-
 if __name__ == "__main__":
-   # Check our `show_extra` session variable
+
+   # checar variável de sessão de mostrar tela de etapa boletagem
    if "show_extra" not in st.session_state:
       st.session_state.show_extra = False
 
    if st.session_state.show_extra:
-      st.write("**Extra content is enabled!** This portion is visible only when 'show_extra' is True.")
-      # Add whatever additional or secret info you want here
+      #Tela das etapas da boletagem está habilitada
       if "tela" not in st.session_state:
         st.session_state.tela = TelaFases()
 
@@ -232,5 +234,5 @@ if __name__ == "__main__":
       tela.run()
    
    else:
-      st.write("Extra content is currently disabled. Return to the Main Page to toggle it.")
+      st.write("Para mostrar a tela de Etapas da Boletagem é necessário submeter uma ordem na tela app.")
   
