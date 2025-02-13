@@ -1,222 +1,158 @@
 import streamlit as st
-import time,os
+import pandas as pd
+import io
 from streamlit_autorefresh import st_autorefresh
-from datetime import timedelta,datetime
-from typing import Literal
 
-# ------------------------------------------------------------------------------
-# Simulação de “backend”:
-# Aqui, estamos apenas simulando a resposta de um backend que retorna o status
-# de cada fase, bem como outras informações úteis (por exemplo, se há CSV disponível).
-# Você pode adaptar para buscar essas informações via API, banco de dados, etc.
-# ------------------------------------------------------------------------------
+# Configurar a página
+st.set_page_config(page_title="Input de ordem - Crédito Privado", layout="wide")
 
-class TelaFases:
+# Inicializar sessão
+if "df" not in st.session_state:
+    st.session_state.df = pd.DataFrame([["", "", ""]] * 100, columns=["Ticker", "Amount", "Price"])
 
-   __TIMEOUT_NEXUS = timedelta(minutes=15) #limite máximo para esperar uma resposta do desenquadramento do nexxus
-   __timer_nexus: datetime | None #timer a partir do momento que a régua fica pronta, se for none a régua n está pronta
+#variáveis de seção
+if "show_extra" not in st.session_state:
+    st.session_state.show_extra = False #mostra tela das Etapas Boletagem
+if "refresh_page" not in st.session_state:
+    st.session_state.refresh_page = False #da um refresh único na tela
 
-   def __init__(self):
-      pass
+#dá refresh na tela se a flag tiver ativada
+if st.session_state.refresh_page:
+    # A minimal interval=100 (ms) or 1 (ms) works for a near-instant refresh
+    st_autorefresh(interval=10, limit=1, key="page_refresh_trigger")
+    # Reset refresh_page to False so it doesn't keep refreshing
+    st.session_state.refresh_page = False
 
-   def get_status_regua(self) -> bool:
+# TODO Remover, só para uso de testes para ainda sem integração com a base de dados com a query inserir_book_ativos.sql e 
+if "df_verificacao" not in st.session_state:
+    st.session_state.df_verificacao = pd.DataFrame({
+        "Ativo": ["KNRI11", "ABCD11", "DEFG11", "HIJK11"],
+        "fundo": ["ABC", "DEF", "GHI", "JKL"],
+        "fundo_restrito": ["", "", "", ""],
+        "blabla": ["", "", "", ""]
+    })
+
+if "show_popup" not in st.session_state:
+    st.session_state.show_popup = False
+if "df_popup" not in st.session_state:
+    st.session_state.df_popup = pd.DataFrame(columns=["Ativo", "Book", "Fundos Restritos"])
+
+# Função para adicionar linha
+def add_row():
+    st.session_state.df = pd.concat([
+        st.session_state.df, 
+        pd.DataFrame([["", "", ""]], columns=st.session_state.df.columns)
+    ], ignore_index=True)
+
+# Função para remover linha
+def remove_row():
+    if not st.session_state.df.empty:
+        st.session_state.df = st.session_state.df.iloc[:-1]
+
+# Função para exportar CSV
+def export_csv():
+    df_filtered = st.session_state.df.replace("", pd.NA).dropna(how="all")
+
+    if df_filtered.isna().any(axis=1).sum() > 0:
+        st.warning("Existem linhas incompletas. Todas as colunas de uma linha devem estar preenchidas para exportação.")
+        return None,False
+    
+    output = io.StringIO()
+    df_filtered.to_csv(output, index=False)
+    return df_filtered, output.getvalue()
+
+# Função para verificar ativos
+def verifica_ativos(df_app: pd.DataFrame):
+
+    ativos_nao_encontrados = [ativo for ativo in df_app["Ticker"] if ativo not in st.session_state.df_verificacao["Ativo"].values]
+
+    if ativos_nao_encontrados:
+        print("ativos não encontrados", ativos_nao_encontrados)
+        st.session_state.df_popup = pd.DataFrame([[ativos_nao_encontrados[0], "", ""]], 
+                                                 columns=["Ativo", "Book", "Fundos Restritos"])
+        st.session_state.show_popup = True
+        st.rerun()
+    # TODO Trocar o download button para triggar o upload de um arquivo para o volume dentro do databricks
+    else:
+        st.write("Acabou, é tetra!") # TODO remover, apenas piada..
+
+# Layout da página
+st.title("Input da ordem para ser processada", anchor=False)
+
+# --- BLOQUEIA A INTERFACE PRINCIPAL SE O POPUP ESTIVER ABERTO ---
+if not st.session_state.show_popup:
+
+    # Grid de edição principal
+    col1, col2, col3 = st.columns([1, 3, 1])
+    with col2:
+        edited_df = st.data_editor(st.session_state.df, num_rows="fixed", use_container_width=True)
+        if not edited_df.equals(st.session_state.df):
+            st.session_state.df = edited_df.copy()
+            st.rerun()
+
+    # Botões de adicionar e remover linha
+    col_btn = st.columns([5, 1, 1, 5])
+    with col_btn[1]:
+        st.button("➕", on_click=add_row)
+    with col_btn[2]:
+        st.button("➖", on_click=remove_row)
+
+    # Botão de download CSV
+    with col3:
+        df_filtered, csv_data = export_csv()
+        if csv_data:
+            if st.button("Encaminhar Ordem"):
+                verifica_ativos(df_filtered)
+                st.session_state.show_extra = not st.session_state.show_extra #libera para ver tela do EtapasBoletagem
+                st.session_state.refresh_page = True
+                st.success("Ordem encaminhada, tela de Etapas Boletagem Disponível")
+
+# --- POPUP ESTILO MODAL ---
+if st.session_state.show_popup:
+    st.markdown(
         """
-        Verifica no session_state se a régua está disponível (mock).
-        Retorna True se 'régua pronta', False se 'processando'.
-        """
-        return st.session_state.mock_regua
-
-   def get_status_nexxus(self) -> Literal['enquadrado', 'desenquadrado', 'esperando']:
-        """
-        Retorna o status do nexxus (mock), de dentro do session_state.
-        """
-        return st.session_state.mock_nexxus_status
-
-   def get_backend_status(self):
-        """
-         Monta o dicionário de status de cada fase do processo, baseando-se
-         nos retornos das funções internas (get_status_regua / get_status_nexxus)
-         e em possíveis ações (ex: timeout).
-        """
-        status_data = {
-            "regua_inicial": {
-                "status": "",         
-                "csv_disponivel": False
-            },
-            "nexxus": {
-                "status": "esperando", #nexxus por padrão está  esperando (ou a régua ou o resultado do enquadramento)
-                "csv_disponivel": False
-            },
-            "logs": [
-                "Log 1: Processo iniciado às 10:00",
-                "Log 2: Régua inicial concluída às 10:05",
-                "Log 3: nexxus em processamento às 10:06",
-            ]
+        <style>
+        .popup {
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translate(-50%, -20%);
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
         }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
-         #verifica status da régua otimizada
-        status_regua = self.get_status_regua()
-        print(status_regua)
-        if status_regua:
-            # Régua otimizada está disponível
-            status_data["regua_inicial"]["status"] = "pronta"
-            status_data["regua_inicial"]["csv_disponivel"] = True
-            self.__timer_nexus = datetime.now()
-        else:
-            # Ainda  Calculando régua 
-            print("calulando régua")
-            status_data["regua_inicial"]["status"] = "processando"
-            status_data["regua_inicial"]["csv_disponivel"] = False
-            self.__timer_nexus = None
-            status_data["nexxus"]["status"] = "esperando" #nexxus está esperando a régua
-            if st.session_state.mock_nexxus_status  == 'desenquadrado':
-                time.sleep(2)
-                st.session_state.mock_nexxus_status = "esperando"
-         
+    with st.container():
+        st.error("⚠️ O ativo abaixo não foi encontrado. Preencha as informações para continuar.")
 
-        status_nexxus = self.get_status_nexxus() #status do nexxus
-        if status_nexxus == "esperando"  and self.__timer_nexus is not None:
-            tempo_decorrido = datetime.now() - self.__timer_nexus
-            if tempo_decorrido >= self.__TIMEOUT_NEXUS:
-                # Bateu no timeout
-                status_data["nexxus"]["status"] = "timeout"
-                # Aqui você pode implementar a lógica de erro, logs adicionais, etc.
-                status_data["logs"].append("Timeout no nexxus após 15 minutos de espera.")
-   
-        elif status_nexxus == 'enquadrado':
-            # Se o nexxus está enquadrado (ex.: “sucesso”)
-            status_data["nexxus"]["status"] = "enquadrado"
-            status_data["nexxus"]["csv_disponivel"] = True
-            status_data["logs"].append("nexxus concluído com status 'enquadrado'.")
+        edited_popup_df = st.data_editor(st.session_state.df_popup, num_rows="fixed", use_container_width=True)
 
-        elif status_nexxus == 'desenquadrado':
-            # Se o nexxus está desenquadrado (ex.: “falha”)
-            status_data["nexxus"]["status"] = "desenquadrado"
-            status_data["nexxus"]["csv_disponivel"] = False
-            status_data["logs"].append("nexxus concluído com status 'desenquadrado'.")
+        st.info("Caso haja a intenção de adicionar mais de um fundo restrito, separe-os por `;`")
 
-        
-        return status_data
+        col_btn_popup = st.columns([2, 1])
+        with col_btn_popup[0]:
+            if st.button("Confirmar"):
+                st.session_state.show_popup = False
+                st.session_state.df_popup = edited_popup_df
+                
+                #TODO trocar pela função de atualização da base de dados (chamar o script inserir_book_ativos.sql)
 
-   # ------------------------------------------------------------------------------
-   # Função principal do Streamlit
-   # ------------------------------------------------------------------------------
-   def run(self):
-        st.set_page_config(page_title="Dashboard de Processo", layout="wide")
-        st.title("Dashboard de Processo")
-
-        # ----------------------------------------------------------------------
-        # Criamos controles de estado no session_state.
-        # Se não existirem, inicializamos com valores default.
-        # ----------------------------------------------------------------------
-        if "mock_regua" not in st.session_state:
-            st.session_state.mock_regua = False  # False = ainda processando
-        if "mock_nexxus_status" not in st.session_state:
-            st.session_state.mock_nexxus_status = "esperando"
-
-        # ----------------------------------------------------------------------
-        # Barra lateral para manipular o estado simulado da régua e do nexxus
-        # ----------------------------------------------------------------------
-        st.sidebar.title("Testar Cenários de Back-end")
-
-        st.sidebar.subheader("Régua")
-        if st.sidebar.button("Régua -> PRONTA"):
-            st.session_state.mock_regua = True
-        if st.sidebar.button("Régua -> PROCESSANDO"):
-            st.session_state.mock_regua = False
-
-        st.sidebar.subheader("nexxus")
-        if st.sidebar.button("nexxus -> ENQUADRADO"):
-            st.session_state.mock_nexxus_status = "enquadrado"
-        if st.sidebar.button("nexxus -> DESENQUADRADO"):
-            st.session_state.mock_nexxus_status = "desenquadrado"
-        if st.sidebar.button("nexxus -> ESPERANDO"):
-            st.session_state.mock_nexxus_status = "esperando"
-
-        # ----------------------------------------------------------------------
-        # Refresh automático (a cada 5s)
-        # ----------------------------------------------------------------------
-        st_autorefresh(interval=5000, limit=None, key="autorefresh")
-
-        # Carrega o status vindo do “back-end”
-        status_data = self.get_backend_status()
-
-        # Monta a interface com 3 colunas, cada uma representando uma fase
-        col_regua_inicial, col_nexclus, col_final = st.columns(3)
-
-        # ----------------------------------------------------------------------
-        # Coluna da “Régua Inicial”
-        # ----------------------------------------------------------------------
-        with col_regua_inicial:
-            st.header("Régua Inicial")
-            
-            regua_status = status_data["regua_inicial"]["status"]
-            csv_regua_disponivel = status_data["regua_inicial"]["csv_disponivel"]
-            
-            if regua_status == "pronta":
-                st.success("Status: Régua Pronta")
-                if csv_regua_disponivel:
-                    st.info("CSV disponível para download.")
-                    if st.button("Baixar CSV - Régua Inicial"):
-                        st.write("Lógica de download do CSV aqui...")
-                else:
-                    st.warning("CSV ainda não está disponível.")
-            elif regua_status == "processando":
-                st.warning("Status: Processando...")
-            elif regua_status == "erro":
-                st.error("Ocorreu um erro na fase ‘Régua Inicial’!")
-            else:
-                # Se for vazio ou algo que não mapeamos, mostramos cru
-                st.write(f"Status: {regua_status}")
-
-        # ----------------------------------------------------------------------
-        # Coluna do “Nexclus” (nexxus)
-        # ----------------------------------------------------------------------
-        with col_nexclus:
-            st.header("nexxus")
-            
-            nexclus_status = status_data["nexxus"]["status"]
-            print("status nexxus: ", nexclus_status)
-            csv_nexclus_disponivel = status_data["nexxus"]["csv_disponivel"]
-            
-            if nexclus_status == "esperando":
-                st.warning("Aguardando input de régua ou calculo...")
-            elif nexclus_status == "sucesso":
-                st.success("Processo concluído com sucesso!")
-                if csv_nexclus_disponivel:
-                    if st.button("Baixar CSV - nexxus"):
-                        st.write("Lógica de download do CSV do nexxus aqui...")
-                else:
-                    st.info("CSV de nexxus não disponível no momento.")
-            elif nexclus_status == "enquadrado":
-                st.success("nexxus enquadrado!")
-            elif nexclus_status == "desenquadrado":
-                st.error("nexxus desenquadrado!")
-            elif nexclus_status == "timeout":
-                st.error("nexxus em TIMEOUT! Processo demorou além do limite.")
-            else:
-                st.write(f"Status: {nexclus_status}")
-
-        # ----------------------------------------------------------------------
-        # Coluna Final
-        # ----------------------------------------------------------------------
-        with col_final:
-            st.header("Final")
-            
-        
-            
-            if nexclus_status == "enquadrado" and regua_status == "pronta":
-                st.success("Processo final concluído!")
-                if st.button("Baixar CSV - Ordem final"):
-                    st.write("Lógica de download do CSV do nexxus aqui...")
-
-            else:
-                st.warning("Aguardando conclusão das etapas anteriores...")
-
-
-if __name__ == "__main__":
-   if "tela" not in st.session_state:
-        st.session_state.tela = TelaFases()
-
-   tela = st.session_state.tela
-   tela.run()
+                st.session_state.df_verificacao = pd.concat([st.session_state.df_verificacao,pd.DataFrame({
+                    "Ativo": [edited_popup_df.iloc[0]["Ativo"]],
+                    "fundo": [edited_popup_df.iloc[0]["Book"]],
+                    "fundo_restrito": [edited_popup_df.iloc[0]["Fundos Restritos"]],
+                    "blabla": [""]})],
+                ignore_index=True
+                )
+                
+                st.rerun()
+        with col_btn_popup[1]:
+            if st.button("Cancelar"):
+                st.session_state.show_popup = False
+                st.rerun()
