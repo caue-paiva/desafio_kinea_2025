@@ -39,9 +39,10 @@ def remove_row():
 def export_csv():
     df_filtered = st.session_state.df.replace("", pd.NA).dropna(how="all")
 
+
     if df_filtered.isna().any(axis=1).sum() > 0:
         st.warning("Existem linhas incompletas. Todas as colunas de uma linha devem estar preenchidas para exportação.")
-        return None
+        return None, False
     
     output = io.StringIO()
     df_filtered.to_csv(output, index=False)
@@ -58,9 +59,9 @@ def verifica_ativos(df_app: pd.DataFrame):
                                                  columns=["Ativo", "Book", "Fundos Restritos"])
         st.session_state.show_popup = True
         st.rerun()
-    # TODO Trocar o download button para triggar o upload de um arquivo para o volume dentro do databricks
+        return False
     else:
-        st.write("Acabou, é tetra!") # TODO remover, apenas piada..
+        return True # TODO remover, apenas piada..
 
 # Layout da página
 st.title("Input da ordem para ser processada", anchor=False)
@@ -88,7 +89,10 @@ if not st.session_state.show_popup:
         df_filtered, csv_data = export_csv()
         if csv_data:
             if st.button("Encaminhar Ordem"):
-                verifica_ativos(df_filtered)
+                status = verifica_ativos(df_filtered)
+                if status:
+                    # TODO Trocar o download button para triggar o upload de um arquivo para o volume dentro do databricks
+                    st.write("Acabou, é tetra.")
 
 # --- POPUP ESTILO MODAL ---
 if st.session_state.show_popup:
