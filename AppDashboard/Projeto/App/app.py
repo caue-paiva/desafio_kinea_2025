@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import io
 from streamlit_autorefresh import st_autorefresh
+from database_connection import connect_database
+from pathlib import Path
+import os
 
 # Configurar a página
 st.set_page_config(page_title="Input de ordem - Crédito Privado", layout="wide")
@@ -16,6 +19,9 @@ if "show_extra" not in st.session_state:
 if "refresh_page" not in st.session_state:
     st.session_state.refresh_page = False #da um refresh único na tela
 
+if "database" not in st.session_state:
+    st.session_state.database = connect_database.Database()
+
 #dá refresh na tela se a flag tiver ativada
 if st.session_state.refresh_page:
     # A minimal interval=100 (ms) or 1 (ms) works for a near-instant refresh
@@ -25,13 +31,10 @@ if st.session_state.refresh_page:
 
 # TODO Remover, só para uso de testes para ainda sem integração com a base de dados com a query inserir_book_ativos.sql e 
 if "df_verificacao" not in st.session_state:
-    st.session_state.df_verificacao = pd.DataFrame({
-        "Ativo": ["KNRI11", "ABCD11", "DEFG11", "HIJK11"],
-        "fundo": ["ABC", "DEF", "GHI", "JKL"],
-        "fundo_restrito": ["", "", "", ""],
-        "blabla": ["", "", "", ""]
-    })
-
+    st.session_state.df_verificacao = st.session_state.database.select_to_dataframe(
+        """select * from desafio_kinea.boletagem_cp.book_ativos"""
+    )
+    
 if "show_popup" not in st.session_state:
     st.session_state.show_popup = False
 if "df_popup" not in st.session_state:
@@ -64,17 +67,35 @@ def export_csv():
 # Função para verificar ativos
 def verifica_ativos(df_app: pd.DataFrame):
 
-    ativos_nao_encontrados = [ativo for ativo in df_app["Ticker"] if ativo not in st.session_state.df_verificacao["Ativo"].values]
+    ativos_nao_encontrados = [
+        ativo for ativo in df_app["Ticker"]
+        if ativo.lower() not in st.session_state.df_verificacao["ativo"].str.lower().values
+    ]
 
     if ativos_nao_encontrados:
-        print("ativos não encontrados", ativos_nao_encontrados)
         st.session_state.df_popup = pd.DataFrame([[ativos_nao_encontrados[0], "", ""]], 
                                                  columns=["Ativo", "Book", "Fundos Restritos"])
         st.session_state.show_popup = True
         st.rerun()
-    # TODO Trocar o download button para triggar o upload de um arquivo para o volume dentro do databricks
+
     else:
         st.write("Acabou, é tetra!") # TODO remover, apenas piada..
+
+def cria_ativo_book(ativo:str, book:str, fundos_restritos:str):
+    dir_atual = Path(os.getcwd())
+    path_final = dir_atual.absolute().parent.parent.parent / Path("ScriptsSQL") / Path("TemplatesPython")
+    with open(path_final / Path("inserir_book_ativos.sql"), "r") as file:
+        sql_template = file.read()
+
+    # Substitui os placeholders no template
+    sql_query = sql_template.format(
+        ativo_entrada=f"{ativo}",  # Aspas simples para strings no SQL
+        book=f"{book}",
+        fundos_restritos=f"{fundos_restritos}"
+    )
+
+    st.session_state.database.executa_query(sql_query)  
+
 
 # Layout da página
 st.title("Input da ordem para ser processada", anchor=False)
@@ -139,15 +160,18 @@ if st.session_state.show_popup:
         with col_btn_popup[0]:
             if st.button("Confirmar"):
                 st.session_state.show_popup = False
+                edited_popup_df = edited_popup_df.rename(columns={"Ativo": "ativo", "Book": "book", "Fundos Restritos": "fundo_restrito"})
                 st.session_state.df_popup = edited_popup_df
-                
-                #TODO trocar pela função de atualização da base de dados (chamar o script inserir_book_ativos.sql)
+
+                cria_ativo_book(edited_popup_df.iloc[0]["ativo"],
+                                edited_popup_df.iloc[0]["book"],
+                                edited_popup_df.iloc[0]["fundo_restrito"]
+                )
 
                 st.session_state.df_verificacao = pd.concat([st.session_state.df_verificacao,pd.DataFrame({
-                    "Ativo": [edited_popup_df.iloc[0]["Ativo"]],
-                    "fundo": [edited_popup_df.iloc[0]["Book"]],
-                    "fundo_restrito": [edited_popup_df.iloc[0]["Fundos Restritos"]],
-                    "blabla": [""]})],
+                    "ativo": [edited_popup_df.iloc[0]["ativo"]],
+                    "book": [edited_popup_df.iloc[0]["book"]],
+                    "fundo_restrito": [edited_popup_df.iloc[0]["fundo_restrito"]]})],
                 ignore_index=True
                 )
                 
