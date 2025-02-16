@@ -89,7 +89,7 @@ def cria_ativo_book(ativo:str, book:str, fundos_restritos:str):
 
     # Substitui os placeholders no template
     sql_query = sql_template.format(
-        ativo_entrada=f"{ativo}",  # Aspas simples para strings no SQL
+        ativo=f"{ativo}",  # Aspas simples para strings no SQL
         book=f"{book}",
         fundos_restritos=f"{fundos_restritos}"
     )
@@ -127,6 +127,9 @@ if not st.session_state.show_popup:
                 st.session_state.show_extra = not st.session_state.show_extra #libera para ver tela do EtapasBoletagem
                 st.session_state.refresh_page = True
                 st.success("Ordem encaminhada, tela de Etapas Boletagem Disponível")
+                print(st.session_state.database.select_to_dataframe(
+        """select * from desafio_kinea.boletagem_cp.book_ativos"""
+    ))
 
 # --- POPUP ESTILO MODAL ---
 if st.session_state.show_popup:
