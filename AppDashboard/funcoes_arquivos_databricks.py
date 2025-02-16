@@ -25,8 +25,12 @@ def ler_arquivo_log(path:str)-> pd.DataFrame | None:
       return None
 
 def update_log_file(novo_log:pd.DataFrame,path_log_antigo:str)->bool:
-   log_existente:pd.DataFrame = ler_arquivo_log(path_log_antigo) #le CSV que ja esta no volume
-   log_final:pd.DataFrame = pd.concat([log_existente,novo_log],axis=0) #concat com novo
+   log_existente:pd.DataFrame | None = ler_arquivo_log(path_log_antigo) #le CSV que ja esta no volume
+
+   if log_existente is not None:
+      log_final:pd.DataFrame = pd.concat([log_existente,novo_log],axis=0) #concat com novo
+   else:
+      log_final:pd.DataFrame = novo_log
 
    return upload_arquivo(log_final,path_log_antigo) #faz upload no lugar do antigo
 
@@ -66,9 +70,11 @@ data = {
 df = pd.DataFrame(data)
 
 
-df_novo = pd.read_csv("logs_nexxus_teste.csv")
+#df_novo = pd.read_csv("logs_nexxus_teste.csv")
 #print(df_novo.info())
 
-result = update_log_file(df_novo,"/Volumes/desafio_kinea/boletagem_cp/files/Logs/logs_nexxus_teste.csv")
-print(result)
+#result = update_log_file(df_novo,"/Volumes/desafio_kinea/boletagem_cp/files/Logs/logs_nexxus_teste.csv")
+#print(result)
 #print(upload_arquivo(df))
+
+print(ler_arquivo_log("/Volumes/desafio_kinea/boletagem_cp/files/Logs/logs_nexxus_teste22121.csv"))
