@@ -1,14 +1,13 @@
 import pandas as pd
-import databricks
+import databricks,os
 from databricks import sql
  
 class Database:
     def __init__(self):
-
         self.conn = sql.connect(
-            server_hostname = 'adb-6915425056083185.5.azuredatabricks.net/',
-            http_path = 'sql/protocolv1/o/6915425056083185/0411-142020-dxdkinpz' ,
-            access_token = "app_token_here"
+            server_hostname =  os.getenv("HOST_NAME"),
+            http_path = os.getenv("SQL_HTTP_PATH") ,
+            access_token = os.getenv("ACESS_TOKEN")
         )
     
     def insert_dataframe(self, df, table_name):

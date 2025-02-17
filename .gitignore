@@ -1,4 +1,5 @@
 /venv
 venv
+/desafio_env
 *.env
 *.csv

@@ -3,6 +3,7 @@ import pandas as pd
 import io
 from streamlit_autorefresh import st_autorefresh
 from database_connection import connect_database
+from volume_databricks.funcoesVolumeDB import upload_ordem
 from pathlib import Path
 import os
 
@@ -19,8 +20,7 @@ if "show_extra" not in st.session_state:
 if "refresh_page" not in st.session_state:
     st.session_state.refresh_page = False #da um refresh único na tela
 
-if "database" not in st.session_state:
-    st.session_state.database = connect_database.Database()
+
 
 #dá refresh na tela se a flag tiver ativada
 if st.session_state.refresh_page:
@@ -28,6 +28,9 @@ if st.session_state.refresh_page:
     st_autorefresh(interval=10, limit=1, key="page_refresh_trigger")
     # Reset refresh_page to False so it doesn't keep refreshing
     st.session_state.refresh_page = False
+
+if "database" not in st.session_state:
+    st.session_state.database = connect_database.Database()
 
 # TODO Remover, só para uso de testes para ainda sem integração com a base de dados com a query inserir_book_ativos.sql e 
 if "df_verificacao" not in st.session_state:
@@ -124,12 +127,18 @@ if not st.session_state.show_popup:
         if csv_data:
             if st.button("Encaminhar Ordem"):
                 verifica_ativos(df_filtered)
-                st.session_state.show_extra = not st.session_state.show_extra #libera para ver tela do EtapasBoletagem
-                st.session_state.refresh_page = True
-                st.success("Ordem encaminhada, tela de Etapas Boletagem Disponível")
-                print(st.session_state.database.select_to_dataframe(
-        """select * from desafio_kinea.boletagem_cp.book_ativos"""
-    ))
+                resultado_upload:bool = upload_ordem(df_filtered) #faz upload do DF no volume
+
+                if resultado_upload: #upload teve sucesso
+                    st.session_state.show_extra = not st.session_state.show_extra #libera para ver tela do EtapasBoletagem
+                    st.session_state.refresh_page = True
+                    st.success("Ordem encaminhada, tela de Etapas Boletagem Disponível")
+                    #print(st.session_state.database.select_to_dataframe(
+                    #"""select * from desafio_kinea.boletagem_cp.book_ativos"""
+                    #))
+                else:
+                    print("Falha ao dar upload do arquivo no volume do databricks")
+   
 
 # --- POPUP ESTILO MODAL ---
 if st.session_state.show_popup:

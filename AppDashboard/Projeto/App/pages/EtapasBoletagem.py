@@ -56,7 +56,7 @@ class TelaFases:
 
          #verifica status da régua otimizada
         status_regua = self.get_status_regua()
-        print(status_regua)
+        #print(status_regua)
         if status_regua:
             # Régua otimizada está disponível
             status_data["regua_otimizada"]["status"] = "pronta"
@@ -64,7 +64,6 @@ class TelaFases:
             self.__timer_nexus = datetime.now()
         else:
             # Ainda  Calculando régua 
-            print("calulando régua")
             status_data["regua_otimizada"]["status"] = "processando"
             status_data["regua_otimizada"]["csv_disponivel"] = False
             self.__timer_nexus = None
@@ -142,7 +141,7 @@ class TelaFases:
         status_data = self.get_backend_status()
 
         # Monta a interface com 3 colunas, cada uma representando uma fase
-        col_regua_otimizada, col_nexclus, col_final = st.columns(3)
+        col_regua_otimizada, col_nexxus, col_final = st.columns(3)
 
         # ----------------------------------------------------------------------
         # Coluna da “Régua Inicial”
@@ -170,39 +169,39 @@ class TelaFases:
                 st.write(f"Status: {regua_status}")
 
         # ----------------------------------------------------------------------
-        # Coluna do “Nexclus” (nexxus)
+        # Coluna do “nexxus” (nexxus)
         # ----------------------------------------------------------------------
-        with col_nexclus:
+        with col_nexxus:
             st.header("nexxus")
             
-            nexclus_status = status_data["nexxus"]["status"]
-            print("status nexxus: ", nexclus_status)
-            csv_nexclus_disponivel = status_data["nexxus"]["csv_disponivel"]
+            nexxus_status = status_data["nexxus"]["status"]
+            #print("status nexxus: ", nexxus_status)
+            csv_nexxus_disponivel = status_data["nexxus"]["csv_disponivel"]
             
-            if nexclus_status == "esperando":
+            if nexxus_status == "esperando":
                 st.warning("Aguardando input de régua ou calculo...")
-            elif nexclus_status == "sucesso":
+            elif nexxus_status == "sucesso":
                 st.success("Processo concluído com sucesso!")
-                if csv_nexclus_disponivel:
+                if csv_nexxus_disponivel:
                     if st.button("Baixar CSV - nexxus"):
                         st.write("Lógica de download do CSV do nexxus aqui...")
                 else:
                     st.info("CSV de nexxus não disponível no momento.")
-            elif nexclus_status == "enquadrado":
+            elif nexxus_status == "enquadrado":
                 st.success("nexxus enquadrado!")
-            elif nexclus_status == "desenquadrado":
+            elif nexxus_status == "desenquadrado":
                 st.error("nexxus desenquadrado!")
-            elif nexclus_status == "timeout":
+            elif nexxus_status == "timeout":
                 st.error("nexxus em TIMEOUT! Processo demorou além do limite.")
             else:
-                st.write(f"Status: {nexclus_status}")
+                st.write(f"Status: {nexxus_status}")
 
         # ----------------------------------------------------------------------
         # Coluna Final
         # ----------------------------------------------------------------------
         with col_final:
             st.header("Final")
-            if nexclus_status == "enquadrado" and regua_status == "pronta":
+            if nexxus_status == "enquadrado" and regua_status == "pronta":
                 st.success("Processo final concluído!")
                 if st.button("Baixar CSV - Ordem final"):
                     st.write("Baixando CSV, a aplicação será resetada para seu estado inicial")

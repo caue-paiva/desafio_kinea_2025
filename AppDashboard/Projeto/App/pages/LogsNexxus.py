@@ -33,7 +33,6 @@ def get_logs(depois_do_tempo:datetime | None = None)->list[LogNexxus]:
     #   ou outra fonte de dados
     # Aqui, só para exemplo:
     logs = []
-    print(Path().resolve())
     path = Path().resolve() / Path("pages") / Path("logs.csv")  
 
     with open(path, mode='r', encoding='utf-8', newline='') as f:
