@@ -1,14 +1,36 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 import streamlit as st
-import csv, ast
 import pandas as pd
-from pathlib import Path
+import requests,os,io
+import pandas as pd
+import ast
+from datetime import datetime
+
+HOST_NAME = os.getenv("HOST_NAME")
+ACESS_TOKEN = os.getenv("ACESS_TOKEN")
+
+def ler_arquivo_log(path:str)-> pd.DataFrame | None:
+   url = f"https://{HOST_NAME}/api/2.0/fs/files{path}"
+
+   headers = {
+      "Authorization": f"Bearer {ACESS_TOKEN}",
+      "Content-Type": "application/octet-stream"
+   }
+
+   response = requests.get(url=url,headers=headers)
+
+   if response.status_code == 200:
+      df = pd.read_csv(io.BytesIO(response.content))
+      return df
+   else:
+      print(f"Falha ao baixar arquivo do path {path}")
+      return None
 
 @dataclass
 class LogOtimizacao:
    ativo:str
-   data_ordem:datetime
+   data:datetime
    iteracao_otimizador:int
    passou_max_pl:bool #régua passou na verificação da tabelacar de MaxPL pelo rating do ativo
    passou_max_emissor:bool #régua passou na verificação da tabelacar de PL pelo rating do emissor
@@ -22,36 +44,35 @@ def get_logs_otimizacao() -> list[LogOtimizacao]:
     Adjust the CSV path as needed for your setup.
     """
     logs = []
-    path = Path().resolve() / "pages" / "logs_otimizacao.csv"
+   
+    df_logs:pd.DataFrame | None = ler_arquivo_log("/Volumes/desafio_kinea/boletagem_cp/files/Logs/logs_otimizacao_teste.csv")
+    if df_logs is None:
+        return logs
 
-    with open(path, mode="r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            # Parse the date/time
-            row_datetime = datetime.strptime(row["data_ordem"], "%Y-%m-%d %H:%M:%S")
+    df_logs["data"] = df_logs["data"].astype("datetime64[ns]") #transforma em datetime
 
-            # Convert the list of fundos to a real Python list
-            # (Expecting something like "['Fundo ABC','Fundo XYZ']")
-            fundos_list = ast.literal_eval(row["fundos_alocados"])
+    # 4) fundos_alocados -> lista de strings (usando ast.literal_eval)
+    def parse_fundos_alocados(value: str) -> list[str]:
+        if not isinstance(value, str) or not value.strip():
+            return []
+        return ast.literal_eval(value)
 
-            # Convert the boolean fields from text to bool
-            passou_max_pl = row["passou_max_pl"].strip().lower() == "true"
-            passou_max_emissor = row["passou_max_emissor"].strip().lower() == "true"
-            passou_anos = row["passou_anos"].strip().lower() == "true"
-
-            log_obj = LogOtimizacao(
-                ativo=row["ativo"],
-                data_ordem=row_datetime,
-                iteracao_otimizador=int(row["iteracao_otimizador"]),
-                fundos_alocados=fundos_list,
-                passou_max_pl=passou_max_pl,
-                passou_max_emissor=passou_max_emissor,
-                passou_anos=passou_anos
-            )
-            logs.append(log_obj)
-
+    df_logs["fundos_alocados"] = df_logs["fundos_alocados"].apply(parse_fundos_alocados) #string  -> lista python
+    
+    # -- Monta a lista de objetos LogOtimizacao -- #
+    for row in df_logs.itertuples(index=False):
+        log_obj = LogOtimizacao(
+            ativo=row.ativo,
+            data=row.data,
+            iteracao_otimizador=row.iteracao_otimizador,
+            passou_max_pl=row.passou_max_pl,
+            passou_max_emissor=row.passou_max_emissor,
+            passou_anos=row.passou_anos,
+            fundos_alocados=row.fundos_alocados
+        )
+        logs.append(log_obj)
+    
     return logs
-
 
 def main():
     st.set_page_config(layout="wide")
@@ -65,7 +86,7 @@ def main():
     for log in logs:
         logs_dicts.append({
             "ativo": log.ativo,
-            "data_ordem": log.data_ordem,  # Keep as datetime
+            "data": log.data,  # Keep as datetime
             "iteracao_otimizador": log.iteracao_otimizador,
             "fundos_alocados": log.fundos_alocados,
             "passou_max_pl": log.passou_max_pl,
@@ -77,8 +98,8 @@ def main():
 
     # 3) Date Filter (Start / End)
     if not df.empty:
-        min_date = df["data_ordem"].min().date()
-        max_date = df["data_ordem"].max().date()
+        min_date = df["data"].min().date()
+        max_date = df["data"].max().date()
     else:
         # If CSV is empty, define a fallback date range
         min_date = datetime.now().date()
@@ -99,14 +120,12 @@ def main():
         end_dt   = datetime.combine(end_date,   datetime.max.time())
 
     # 4) Filter the DataFrame by date
-    mask = (df["data_ordem"] >= start_dt) & (df["data_ordem"] <= end_dt)
+    mask = (df["data"] >= start_dt) & (df["data"] <= end_dt)
     df_filtered = df[mask].copy()
 
     # 5) Show the results
     st.subheader("Logs de Otimização Filtrados")
     st.dataframe(df_filtered, use_container_width=True, height=400)
 
-
-# If running this file directly (e.g., streamlit run pages/2_LogsOtimizacao.py)
 if __name__ == "__main__":
     main()

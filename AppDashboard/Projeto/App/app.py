@@ -3,9 +3,42 @@ import pandas as pd
 import io
 from streamlit_autorefresh import st_autorefresh
 from database_connection import connect_database
-from volume_databricks.funcoesVolumeDB import upload_ordem
 from pathlib import Path
 import os
+from datetime import datetime
+import requests,os,io
+import pandas as pd
+
+HOST_NAME = os.getenv("HOST_NAME")
+ACESS_TOKEN = os.getenv("ACESS_TOKEN")
+
+def upload_arquivo(df:pd.DataFrame,path:str,overwrite:bool = True)->bool:
+
+   csv_buffer = io.BytesIO()
+   df.to_csv(csv_buffer, index=False)  # Save CSV as bytes
+   csv_buffer.seek(0)  # Reset buffer position
+
+   url = f"https://{HOST_NAME}/api/2.0/fs/files{path}"
+   headers = {
+      "Authorization": f"Bearer {ACESS_TOKEN}",
+      "Content-Type": "application/octet-stream"
+   }
+
+   params = {
+        "overwrite": str(overwrite).lower()  # Convert Boolean to lowercase string (true/false)
+   }
+
+
+   response = requests.put(url=url,headers=headers,params=params,data=csv_buffer)
+   if response.status_code == 204:
+      return True
+   else:
+      return False
+
+def upload_ordem(ordem:pd.DataFrame)->bool:
+   str_tempo = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+   path = f"/Volumes/desafio_kinea/boletagem_cp/files/Ordem/ordem_{str_tempo}.csv"
+   return upload_arquivo(ordem,path,True)
 
 # Configurar a página
 st.set_page_config(page_title="Input de ordem - Crédito Privado", layout="wide")
