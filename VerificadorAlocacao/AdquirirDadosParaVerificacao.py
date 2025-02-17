@@ -12,6 +12,12 @@ Dados que serão extraídos:
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC SELECT * FROM desafio_kinea.boletagem_cp.book_ativos
+# MAGIC
+
+# COMMAND ----------
+
 import os
 from pathlib import Path
 from pyspark.sql import DataFrame
