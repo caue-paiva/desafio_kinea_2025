@@ -1,9 +1,9 @@
 import streamlit as st
-import time,os
+import time,requests,io,os
 from streamlit_autorefresh import st_autorefresh
 from datetime import timedelta,datetime
 from typing import Literal
-
+import pandas as pd
 # ------------------------------------------------------------------------------
 # Simulação de “backend”:
 # Aqui, estamos apenas simulando a resposta de um backend que retorna o status
@@ -16,8 +16,32 @@ class TelaFases:
    __TIMEOUT_NEXUS = timedelta(minutes=15) #limite máximo para esperar uma resposta do desenquadramento do nexxus
    __timer_nexus: datetime | None #timer a partir do momento que a régua fica pronta, se for none a régua n está pronta
 
+   HOST_NAME = os.getenv("HOST_NAME")
+   ACESS_TOKEN = os.getenv("ACESS_TOKEN")
+
    def __init__(self):
       pass
+   
+   def __baixa_input_nexxus(self)->pd.DataFrame | None:
+        """
+        Baixa o arquivo de input para o nexxus que está no diretório InputNexxus/ do volume 
+        """
+        path_arquivo:str = "/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/input_nexxus_teste.csv"
+        url = f"https://{self.HOST_NAME}/api/2.0/fs/files{path_arquivo}"
+
+        headers = {
+            "Authorization": f"Bearer {self.ACESS_TOKEN}",
+            "Content-Type": "application/octet-stream"
+        }
+
+        response = requests.get(url=url,headers=headers)
+
+        if response.status_code == 200:
+            df = pd.read_csv(io.BytesIO(response.content))
+            return df
+        else:
+            print(f"Falha ao baixar arquivo do path {path_arquivo}")
+            return None
 
    def get_status_regua(self) -> bool:
         """
@@ -156,10 +180,21 @@ class TelaFases:
                 st.success("Status: Régua Pronta")
                 if csv_regua_disponivel:
                     st.info("CSV disponível para download.")
-                    if st.button("Baixar CSV - Régua Otimizada"):
-                        st.write("Lógica de download do CSV aqui...")
-                else:
-                    st.warning("CSV ainda não está disponível.")
+                    
+                    df:pd.DataFrame | None  = self.__baixa_input_nexxus() #df da régua no formato do nexxus
+                    if df is not None: #df valido
+                        csv_data = df.to_csv(index=False).encode('utf-8')
+                
+                        # botão de baixar CSV
+                        st.download_button(
+                                label="Clique para baixar CSV",
+                                data=csv_data,
+                                file_name="regua_otimizada.csv",
+                                mime="text/csv",
+                        )
+                    else: #df não valido por algum motivo
+                        st.warning("Falha ao baixar CSV do input do Nexxus.")
+
             elif regua_status == "processando":
                 st.warning("Status: Processando...")
             elif regua_status == "erro":
