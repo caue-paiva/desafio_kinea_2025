@@ -1,6 +1,6 @@
 from pathlib import Path
 
-class DeletaArquivosOrdem:
+class DeletaArquivos:
 
     PATH_VOLUME = Path("/Volumes/desafio_kinea/boletagem_cp/files")
 
@@ -18,7 +18,7 @@ class DeletaArquivosOrdem:
 
     
 
-    def deleta_arquivos_ordem(self,dados_ordem = True, regua_inicial = True, regua_otimizada = True)->bool:
+    def deleta_arquivos_ordem(self,dados_ordem = True, regua_inicial = True, regua_otimizada = True, resultado_final:bool = True)->bool:
         sucesso_delecao = True
         if dados_ordem:
             sucesso_delecao = sucesso_delecao and self.__deletar_arquivos("Ordem")
@@ -26,6 +26,8 @@ class DeletaArquivosOrdem:
             sucesso_delecao = sucesso_delecao and self.__deletar_arquivos("Reguas")
         if regua_otimizada:
             sucesso_delecao = sucesso_delecao and self.__deletar_arquivos("ReguasOtimizadas")
+        if resultado_final:
+            sucesso_delecao = sucesso_delecao and self.__deletar_arquivos("ResultadoFinal")
 
         return sucesso_delecao
     
@@ -35,5 +37,5 @@ if __name__ == "__main__":
     """
     Cuidado ao testar o código, pq pode deletar todos os arquivos e ai teria que criar uma ordem nova para os testes
     """
-    #deleta = DeletaArquivosOrdem()
+    #deleta = DeletaArquivos()
     #print(deleta.deleta_arquivos_ordem(False,False,False))
