@@ -143,6 +143,13 @@ class _Queries:
         query = self.dict_queries["credito_aportado.sql"]
         return spark.sql(query)
     
+    def classe_produto(self)->DataFrame:
+        """
+        Retorna um DF com as classes de produto (ativo) de acordo com a tabela productclassinfo
+        """
+        query = """SELECT Product, ProductClass FROM desafio_kinea.boletagem_cp.productclassinfo;"""
+        return spark.sql(query)
+    
     
 class DadosAlocacao:
     
@@ -159,6 +166,7 @@ class DadosAlocacao:
         "mapa_tabelacar": timedelta(weeks=4),
         "verificacao_range_e_book": timedelta(days=1),
         "credito_aportado": timedelta(days=1),
+        "classe_produto": timedelta(weeks=1),
     }
     __MAPA_TABELAS_METODOS:dict = {
         "tabelascar_pl_emissores": __QUERIES.tabelascar_pl_emissor,
@@ -170,6 +178,7 @@ class DadosAlocacao:
         "mapa_tabelacar": __QUERIES.mapa_tabelacar,
         "verificacao_range_e_book": __QUERIES.verificacao_range_e_book,
         "credito_aportado": __QUERIES.credito_aportado,
+        "classe_produto": __QUERIES.classe_produto,
     }
     __METODOS_COM_ARGS = ["tabelascar_L_anos","tabelascar_info_fundos"]
 
@@ -403,6 +412,13 @@ class DadosAlocacao:
         """
         self.__verifica_dados_atualizados()
         return self.__ler_csv("verificacao_range_e_book.csv")
+    
+    def get_classe_produto(self) -> pd.DataFrame | None:
+        """
+        Retorna um DF que associa ativos à sua classe, de acordo com a tabela productclassinfo
+        """
+        self.__verifica_dados_atualizados()
+        return self.__ler_csv("classe_produto.csv")
 
 
 if __name__ == "__main__":
@@ -414,5 +430,9 @@ if __name__ == "__main__":
         forca_atualizacao = False
         print("Não força atualização")
 
-    dados = DadosAlocacao(forca_atualizacao)
+    dados = DadosAlocacao(False)
+
+    df = dados.get_classe_produto()
+
+    display(df)
  
