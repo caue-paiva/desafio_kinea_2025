@@ -21,6 +21,39 @@ class TelaFases:
 
    def __init__(self):
       pass
+
+   def __listdir_databricks(self,nome_dir:str)->list | None:
+        """
+        Lista os arquivos de uma diretório no Databricks ou retorna None se ele não existir
+        """
+        path_base = "/Volumes/desafio_kinea/boletagem_cp/files/"
+        api_url = f"https://{self.HOST_NAME}/api/2.0/fs/directories{path_base}{nome_dir}"
+
+        headers = {
+            "Authorization": f"Bearer {self.ACESS_TOKEN}",
+            "Content-Type": "application/octet-stream"
+        }
+
+        response = requests.get(url=api_url,headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            contents = data.get('contents', [])
+            
+            entries = []
+            for item in contents:
+                entry = {
+                    'path': item.get('path'),
+                    'is_directory': item.get('is_directory', False),
+                    'file_size': item.get('file_size'),  # may be None or omitted if it's a directory
+                    'last_modified': item.get('last_modified'),
+                    'name': item.get('name')
+                }
+                entries.append(entry)
+
+            return entries
+        else:
+            print(f"Falha ao lista arquivos do diretório {nome_dir}")
+            return None
    
    def __baixa_input_nexxus(self)->pd.DataFrame | None:
         """
@@ -45,10 +78,13 @@ class TelaFases:
 
    def get_status_regua(self) -> bool:
         """
-        Verifica no session_state se a régua está disponível (mock).
-        Retorna True se 'régua pronta', False se 'processando'.
+        verifica no volume InputNexxus se o arquivo CSV que combina todas as réguas no formato de input do databricks está pronta.
+        Retorna true se o diretório não estiver vazio
         """
-        return st.session_state.mock_regua
+        conteudo_dir_reguas:list = self.__listdir_databricks("InputNexxus")  #arquivos nesse dir
+        valor_debug:bool = st.session_state.mock_regua
+        
+        return valor_debug or len(conteudo_dir_reguas) != 0
 
    def get_status_nexxus(self) -> Literal['enquadrado', 'desenquadrado', 'esperando']:
         """
