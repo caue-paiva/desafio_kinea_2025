@@ -90,7 +90,11 @@ class TelaFases:
         """
         Retorna o status do nexxus (mock), de dentro do session_state.
         """
-        return st.session_state.mock_nexxus_status
+        conteudo_dir_nexxus:list = self.__listdir_databricks("ResultadoFinal")  #arquivos nesse dir
+        print(conteudo_dir_nexxus)
+        valor_debug:bool = st.session_state.mock_nexxus_status
+        
+        return valor_debug or len(conteudo_dir_nexxus) != 0
 
    def get_backend_status(self):
         """
