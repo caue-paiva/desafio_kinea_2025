@@ -20,7 +20,7 @@ class TelaFases:
    ACESS_TOKEN = os.getenv("ACESS_TOKEN")
 
    def __init__(self):
-      pass
+      self.__timer_nexus = None
 
    def __listdir_databricks(self,nome_dir:str)->list | None:
         """
@@ -59,7 +59,28 @@ class TelaFases:
         """
         Baixa o arquivo de input para o nexxus que está no diretório InputNexxus/ do volume 
         """
-        path_arquivo:str = "/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/input_nexxus_teste.csv"
+        path_arquivo:str = "/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/input_nexxus.csv"
+        url = f"https://{self.HOST_NAME}/api/2.0/fs/files{path_arquivo}"
+
+        headers = {
+            "Authorization": f"Bearer {self.ACESS_TOKEN}",
+            "Content-Type": "application/octet-stream"
+        }
+
+        response = requests.get(url=url,headers=headers)
+
+        if response.status_code == 200:
+            df = pd.read_csv(io.BytesIO(response.content))
+            return df
+        else:
+            print(f"Falha ao baixar arquivo do path {path_arquivo}")
+            return None
+   
+   def __baixa_resultado_arquivo(self,path_volume:str)->pd.DataFrame | None:
+        """
+        Baixa o arquivo do resultado final
+        """
+        path_arquivo:str = f"/Volumes/desafio_kinea/boletagem_cp/files/{path_volume}"
         url = f"https://{self.HOST_NAME}/api/2.0/fs/files{path_arquivo}"
 
         headers = {
@@ -86,100 +107,83 @@ class TelaFases:
         
         return valor_debug or len(conteudo_dir_reguas) != 0
 
-   def get_status_nexxus(self) -> Literal['enquadrado', 'desenquadrado', 'esperando']:
+   def get_status_resultado_final(self) -> Literal['enquadrado', 'desenquadrado', 'esperando']:
         """
         Retorna o status do nexxus (mock), de dentro do session_state.
         """
         conteudo_dir_nexxus:list = self.__listdir_databricks("ResultadoFinal")  #arquivos nesse dir
-        print(conteudo_dir_nexxus)
-        valor_debug:bool = st.session_state.mock_nexxus_status
+        valor_debug:bool = st.session_state.mock_final_status
         
         return valor_debug or len(conteudo_dir_nexxus) != 0
 
    def get_backend_status(self):
         """
-         Monta o dicionário de status de cada fase do processo, baseando-se
-         nos retornos das funções internas (get_status_regua / get_status_nexxus)
-         e em possíveis ações (ex: timeout).
+        pega os status dos componentes do back-end:
+
+        -> Régua tem os status: pronta ou processando
+
+        -> nexxus tem os status: esperando_calculo (quando a régua para input no nexxus não está pronta) e pronto_input (quando 
+        a reǵua foi calculada e ele está esperando o input do usuário)
+
+        -> resultado_final: É true ou False
+
         """
         status_data = {
             "regua_otimizada": {
-                "status": "",         
-                "csv_disponivel": False
+                "status": "processando",        
             },
             "nexxus": {
-                "status": "esperando", #nexxus por padrão está  esperando (ou a régua ou o resultado do enquadramento)
-                "csv_disponivel": False
+                "status": "esperando_calculo", #2 estados: esperando_calculo e pronto_input
             },
-            "logs": [
-                "Log 1: Processo iniciado às 10:00",
-                "Log 2: Régua Otimizada concluída às 10:05",
-                "Log 3: nexxus em processamento às 10:06",
-            ]
+            "resultado_final" : False
         }
 
-         #verifica status da régua otimizada
+        #verifica status da régua otimizada
         status_regua = self.get_status_regua()
-        #print(status_regua)
-        if status_regua:
-            # Régua otimizada está disponível
+        
+        if status_regua:  # Régua otimizada está disponível
             status_data["regua_otimizada"]["status"] = "pronta"
-            status_data["regua_otimizada"]["csv_disponivel"] = True
-            self.__timer_nexus = datetime.now()
-        else:
-            # Ainda  Calculando régua 
+
+            if self.__timer_nexus is None: #seta timer do nexxus se ele for none
+                self.__timer_nexus = datetime.now()
+            else: # Verifica se nexxus deu timeout
+                tempo_decorrido = datetime.now() - self.__timer_nexus
+                if tempo_decorrido >= self.__TIMEOUT_NEXUS: 
+                    status_data["nexxus"]["status"] = "timeout"
+                    status_data["logs"].append("Timeout no nexxus após 15 minutos de espera.")
+
+            st.session_state.mock_nexxus_status  = "pronto_input" #nexxus está processando input
+            status_data["nexxus"]["status"] = "pronto_input"
+        else:  # Ainda  Calculando régua 
             status_data["regua_otimizada"]["status"] = "processando"
-            status_data["regua_otimizada"]["csv_disponivel"] = False
             self.__timer_nexus = None
-            status_data["nexxus"]["status"] = "esperando" #nexxus está esperando a régua
-            if st.session_state.mock_nexxus_status  == 'desenquadrado':
-                time.sleep(2)
-                st.session_state.mock_nexxus_status = "esperando"
-         
+            
+            if st.session_state.mock_nexxus_status  == "pronto_input": #regua tava processando mas desenquadrou
+                status_data["nexxus"]["status"] = "esperando_calculo" #agora nexxus vai esperar uma nova reǵua
+                time.sleep(2) #sleep para poder mostrar mensagem para o user
+                st.session_state.mock_nexxus_status  = 'esperando_calculo'
+            
 
-        status_nexxus = self.get_status_nexxus() #status do nexxus
-        if status_nexxus == "esperando"  and self.__timer_nexus is not None:
-            tempo_decorrido = datetime.now() - self.__timer_nexus
-            if tempo_decorrido >= self.__TIMEOUT_NEXUS:
-                # Bateu no timeout
-                status_data["nexxus"]["status"] = "timeout"
-                # Aqui você pode implementar a lógica de erro, logs adicionais, etc.
-                status_data["logs"].append("Timeout no nexxus após 15 minutos de espera.")
-   
-        elif status_nexxus == 'enquadrado':
-            # Se o nexxus está enquadrado (ex.: “sucesso”)
-            status_data["nexxus"]["status"] = "enquadrado"
-            status_data["nexxus"]["csv_disponivel"] = True
-            status_data["logs"].append("nexxus concluído com status 'enquadrado'.")
-
-        elif status_nexxus == 'desenquadrado':
-            # Se o nexxus está desenquadrado (ex.: “falha”)
-            status_data["nexxus"]["status"] = "desenquadrado"
-            status_data["nexxus"]["csv_disponivel"] = False
-            status_data["logs"].append("nexxus concluído com status 'desenquadrado'.")
-
+        resultado_final:bool = self.get_status_resultado_final() #status do resultado final
+        if resultado_final:
+            status_data["resultado_final"] = True
         
         return status_data
 
-   # ------------------------------------------------------------------------------
    # Função principal do Streamlit
-   # ------------------------------------------------------------------------------
    def run(self):
-        #st.set_page_config(page_title="Dashboard de Processo", layout="wide")
         st.title("Dashboard de Processo")
 
-        # ----------------------------------------------------------------------
         # Criamos controles de estado no session_state.
         # Se não existirem, inicializamos com valores default.
-        # ----------------------------------------------------------------------
         if "mock_regua" not in st.session_state:
             st.session_state.mock_regua = False  # False = ainda processando
         if "mock_nexxus_status" not in st.session_state:
             st.session_state.mock_nexxus_status = "esperando"
+        if "mock_final_status" not in st.session_state:
+            st.session_state.mock_final_status = False
 
-        # ----------------------------------------------------------------------
         # Barra lateral para manipular o estado simulado da régua e do nexxus
-        # ----------------------------------------------------------------------
         st.sidebar.title("Testar Cenários de Back-end")
 
         st.sidebar.subheader("Régua")
@@ -188,17 +192,13 @@ class TelaFases:
         if st.sidebar.button("Régua -> PROCESSANDO"):
             st.session_state.mock_regua = False
 
-        st.sidebar.subheader("nexxus")
-        if st.sidebar.button("nexxus -> ENQUADRADO"):
-            st.session_state.mock_nexxus_status = "enquadrado"
-        if st.sidebar.button("nexxus -> DESENQUADRADO"):
-            st.session_state.mock_nexxus_status = "desenquadrado"
-        if st.sidebar.button("nexxus -> ESPERANDO"):
-            st.session_state.mock_nexxus_status = "esperando"
-
-        # ----------------------------------------------------------------------
+        st.sidebar.subheader("Resultado Final")
+        if st.sidebar.button("Resultado Final -> Pronto"):
+            st.session_state.mock_final_status = True
+        if st.sidebar.button("Resultado Final -> Esperando"):
+            st.session_state.mock_final_status = False
+       
         # Refresh automático (a cada 5s)
-        # ----------------------------------------------------------------------
         st_autorefresh(interval=5000, limit=None, key="autorefresh")
 
         # Carrega o status vindo do “back-end”
@@ -207,32 +207,27 @@ class TelaFases:
         # Monta a interface com 3 colunas, cada uma representando uma fase
         col_regua_otimizada, col_nexxus, col_final = st.columns(3)
 
-        # ----------------------------------------------------------------------
         # Coluna da “Régua Inicial”
-        # ----------------------------------------------------------------------
         with col_regua_otimizada:
             st.header("Régua Otimizada")
             
-            regua_status = status_data["regua_otimizada"]["status"]
-            csv_regua_disponivel = status_data["regua_otimizada"]["csv_disponivel"]
-            
+            regua_status = status_data["regua_otimizada"]["status"]            
             if regua_status == "pronta":
                 st.success("Status: Régua Pronta")
-                if csv_regua_disponivel:
-                    st.info("CSV disponível para download.")
+                st.info("CSV disponível para download.")
                     
-                    df:pd.DataFrame | None  = self.__baixa_input_nexxus() #df da régua no formato do nexxus
-                    if df is not None: #df valido
-                        csv_data = df.to_csv(index=False).encode('utf-8')
+                df:pd.DataFrame | None  = self.__baixa_resultado_arquivo("InputNexxus/input_nexxus.csv") #df da régua no formato do nexxus
+                if df is not None: #df valido
+                    csv_data = df.to_csv(index=False).encode('utf-8')
                 
-                        # botão de baixar CSV
-                        st.download_button(
+                    # botão de baixar CSV
+                    st.download_button(
                                 label="Clique para baixar CSV",
                                 data=csv_data,
-                                file_name="regua_otimizada.csv",
+                                file_name="input_nexxus.csv",
                                 mime="text/csv",
-                        )
-                    else: #df não valido por algum motivo
+                    )
+                else: #df não valido por algum motivo
                         st.warning("Falha ao baixar CSV do input do Nexxus.")
 
             elif regua_status == "processando":
@@ -243,31 +238,17 @@ class TelaFases:
                 # Se for vazio ou algo que não mapeamos, mostramos cru
                 st.write(f"Status: {regua_status}")
 
-        # ----------------------------------------------------------------------
         # Coluna do “nexxus” (nexxus)
-        # ----------------------------------------------------------------------
         with col_nexxus:
-            st.header("nexxus")
-            
+            st.header("Nexxus")     
             nexxus_status = status_data["nexxus"]["status"]
-            #print("status nexxus: ", nexxus_status)
-            csv_nexxus_disponivel = status_data["nexxus"]["csv_disponivel"]
-            
-            if nexxus_status == "esperando":
-                st.warning("Aguardando input de régua ou calculo...")
-            elif nexxus_status == "sucesso":
-                st.success("Processo concluído com sucesso!")
-                if csv_nexxus_disponivel:
-                    if st.button("Baixar CSV - nexxus"):
-                        st.write("Lógica de download do CSV do nexxus aqui...")
-                else:
-                    st.info("CSV de nexxus não disponível no momento.")
-            elif nexxus_status == "enquadrado":
-                st.success("nexxus enquadrado!")
-            elif nexxus_status == "desenquadrado":
-                st.error("nexxus desenquadrado!")
+       
+            if nexxus_status == "esperando_calculo":
+                st.warning("Aguardando cálculo de régua para o Nexxus")
+            elif nexxus_status == "pronto_input":
+                st.success("Nexxus está pronto para receber régua")
             elif nexxus_status == "timeout":
-                st.error("nexxus em TIMEOUT! Processo demorou além do limite.")
+                st.error(f"nexxus em TIMEOUT! Processo demorou além do limite de {str(self.__TIMEOUT_NEXUS)}.")
             else:
                 st.write(f"Status: {nexxus_status}")
 
@@ -276,19 +257,35 @@ class TelaFases:
         # ----------------------------------------------------------------------
         with col_final:
             st.header("Final")
-            if nexxus_status == "enquadrado" and regua_status == "pronta":
+            resultado_final = status_data["resultado_final"]
+            if resultado_final:
+                
                 st.success("Processo final concluído!")
-                if st.button("Baixar CSV - Ordem final"):
-                    st.write("Baixando CSV, a aplicação será resetada para seu estado inicial")
-                    st.write("Lógica de download do CSV do nexxus aqui...")
+                st.write("Ao baixar o CSV, a aplicação será resetada para seu estado inicial")
                     
-                    st.session_state.clear() #limpa o esta da aplicação
-                    time.sleep(3) 
-                    st.switch_page("app.py")
-                    time.sleep(1.5) 
-                    st.rerun()  # Recarrega a aplicação
+                df:pd.DataFrame | None  = self.__baixa_resultado_arquivo("ResultadoFinal/resultado_final.csv") #df da régua no formato do resultado final
+                if df is not None: #df valido
+                    csv_data = df.to_csv(index=False).encode('utf-8')
+                    
+                    # botão de baixar CSV
+                    click_download = st.download_button(
+                                    label="Clique para baixar CSV final",
+                                    data=csv_data,
+                                    file_name="resultado_final.csv",
+                                    mime="text/csv",
+                    )
 
-
+                    if click_download: #clicou em baixar
+                        st.session_state.clear() #limpa o esta da aplicação
+                        time.sleep(5) 
+                        st.switch_page("app.py")
+                        time.sleep(4) 
+                        st.rerun()  # Recarrega a aplicação
+                
+                else: #df não valido por algum motivo
+                        st.warning("Falha ao baixar CSV do resultado final.")
+                    
+               
             else:
                 st.warning("Aguardando conclusão das etapas anteriores...")
 
