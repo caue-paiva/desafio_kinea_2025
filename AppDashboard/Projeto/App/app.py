@@ -45,7 +45,7 @@ st.set_page_config(page_title="Input de ordem - Crédito Privado", layout="wide"
 
 # Inicializar sessão
 if "df" not in st.session_state:
-    st.session_state.df = pd.DataFrame([["", "", ""]] * 100, columns=["Ticker", "Amount", "Price"])
+    st.session_state.df = pd.DataFrame([["", "", "", ""]] * 100, columns=["Ticker", "Amount", "Price", "Broker"])
 
 #variáveis de seção
 if "show_extra" not in st.session_state:
@@ -65,7 +65,6 @@ if st.session_state.refresh_page:
 if "database" not in st.session_state:
     st.session_state.database = connect_database.Database()
 
-# TODO Remover, só para uso de testes para ainda sem integração com a base de dados com a query inserir_book_ativos.sql e 
 if "df_verificacao" not in st.session_state:
     st.session_state.df_verificacao = st.session_state.database.select_to_dataframe(
         """select * from desafio_kinea.boletagem_cp.book_ativos"""
@@ -80,7 +79,7 @@ if "df_popup" not in st.session_state:
 def add_row():
     st.session_state.df = pd.concat([
         st.session_state.df, 
-        pd.DataFrame([["", "", ""]], columns=st.session_state.df.columns)
+        pd.DataFrame([["", "", "", ""]], columns=st.session_state.df.columns)
     ], ignore_index=True)
 
 # Função para remover linha
@@ -113,9 +112,6 @@ def verifica_ativos(df_app: pd.DataFrame):
                                                  columns=["Ativo", "Book", "Fundos Restritos"])
         st.session_state.show_popup = True
         st.rerun()
-
-    else:
-        st.write("Acabou, é tetra!") # TODO remover, apenas piada..
 
 def cria_ativo_book(ativo:str, book:str, fundos_restritos:str):
     dir_atual = Path(os.getcwd())
