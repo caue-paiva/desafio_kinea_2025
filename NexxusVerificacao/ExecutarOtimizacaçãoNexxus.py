@@ -1,12 +1,26 @@
+!pip install openai==0.28
+dbutils.library.restartPython()
 import pandas as pd
+import numpy as np
 import scipy
 import ParsingMemoriaCalculo
+import openai
+import ast
+openai.api_type = "azure"
+openai.api_base = "https://oai-dk.openai.azure.com/"
+openai.api_version = "2023-12-01-preview"
+openai.api_key = dbutils.secrets.get('akvdesafiokinea','azure-oai-dk')
+
 def gerar_restricao(descricao,ativos,saldo_base,exposicao,l_max,l_min):   
     '''
     Função para gerar código de restrição que será utilizado na otimização
     '''
     contexto_gpt = '''
-        Você irá receber a descrição de uma regra, um conjunto posições de ativos que são considerados para o cálculo dessa regra, um saldo base, limite minimo e máximo em relação a esse saldo base e a porcentagem que não por essa restrição. Lembre-se de considerar se a porcentagem está acima do limite_maximo ou abaixo do limite minimo para tomar a decisão de como escrever o código
+        Você irá receber a descrição de uma regra, um conjunto posições de ativos que são considerados para o cálculo dessa regra, um saldo base, limite minimo e máximo em relação a esse saldo base, a porcentagem que não por essa restrição e o saldo dos outros ativos naquele fundo. 
+        
+        Lembre-se de considerar se a porcentagem está acima do limite_maximo ou abaixo do limite minimo para tomar a decisão de como escrever o código.
+        Lembre-se também que o saldo outros ativos deve ser diminuido na hora do retorno. Não se esqueça disso
+
         A partir disso você deve gerar um código de restrição no formato utilizado pelo scipy.minimize.
         
         Exemplo 1:
@@ -16,9 +30,11 @@ def gerar_restricao(descricao,ativos,saldo_base,exposicao,l_max,l_min):
             Limite Mínimo: 0
             Limite Máximo: 0.2
             Porcentagem:0.25
-            def restricao(x):
+            SaldoOutrosAtivos: 250000
+            def restricao(x,SaldoOutrosAtivos):
                 ativos_considerados = [x[0],x[1],x[4],x[5],x[6]...]
-                return  0.2 * 500000 -  sum(ativos_considerados)
+                return  (0.2 * 500000 ) - SaldoOutrosAtivos - sum(ativos_considerados)
+               
         Exemplo 2: 
             Descrição: Regulamento - POLÍTICA DE INVESTIMENTO - O objetivo do FUNDO é aplicar, no mínimo, 80% (oitenta por cento) de seus recursos em ativos financeiros de renda fixa relacionados diretamente, ou sintetizados via derivativos, ao fator de risco que dá nome à classe, observado que a rentabilidade do FUNDO será impactada pelos custos e despesas do FUNDO, inclusive taxa de administração.
             Posição Ativos: [0,1,4,5,6]
@@ -26,9 +42,22 @@ def gerar_restricao(descricao,ativos,saldo_base,exposicao,l_max,l_min):
             Limite Mínimo: 0.8
             Limite Máximo: 1
             Porcentagem: 0.68
+            SaldoOutrosAtivos: 250000
+            def restricao(x,SaldoOutrosAtivos):
+                ativos_considerados = [x[0],x[1],x[4],x[5],x[6]...]
+                return sum(ativos_considerados) + SaldoOutrosAtivos - (0.8 * 500000) 
+    '''
+    '''
+            Exemplo 3:
+            Descrição: Vedação
+            Posição Ativos: [0,1,4,5,6]
+            Saldo Base: 500000
+            Limite Mínimo: null
+            Limite Máximo: null
+            Porcentagem: null
             def restricao(x):
                 ativos_considerados = [x[0],x[1],x[4],x[5],x[6]...]
-                return sum(ativos_considerados) - 0.8 * 500000    
+                return -sum(ativos_considerados)
     '''
     message_text = [
                 {"role":"system","content":contexto_gpt},
@@ -52,57 +81,171 @@ def indices_ativos (ordem,fundo,ativos):
     '''
     Função para retornar index dos ativos para que possamos utilizar isso na otimização
     '''
-    indices = ordem[(ordem['fundo'] == fundo)  & (ordem['ativo'].isin(ativos))].index
+    indices = ordem[(ordem['FUNDO'] == fundo)  & (ordem['ATIVO'].isin(ativos))].index
     return indices
+
+def calcula_saldo_outros_ativos(fundo,memoriacalculo,ordem):
+    ordem_fundo = ordem[ordem['FUNDO'] == fundo][["ATIVO","PU"]].rename(columns={'PU':'POSIÇÃO_ORDEM','ATIVO':'NOME'})
+    memoriacalculo = memoriacalculo.groupby('NOME',as_index=False)['POSIÇÃO'].sum()
+    df = pd.merge(memoriacalculo,ordem_fundo,on='NOME',how='left').fillna(0)
+    df['POSIÇÃO_REAL'] = df['POSIÇÃO'] - df['POSIÇÃO_ORDEM']
+    return df['POSIÇÃO_REAL'].sum()
 
 def otimiza_ordem():
     #Ler ordem que foi usada de input pro nexxus
-    ordem = pd.read_csv("/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/input_nexxus.csv")
-    
-    #Ler Histórico Nexxus pra DataHoraVersão Mais recente
-    historico_nexxus = spark.sql("") #Completar  com query do Cícero
+    ordem = pd.read_csv("/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/input_nexxus_teste_joao - Copia.csv",sep=';')
+    ordem['VALOR'] = ordem['PU'] * ordem['QTDE']
+    #Gerando Vetor Inicial com Distribuição Uniforme Entre os Fundos, necessário igual a somar final
+    ordem_0 = np.zeros_like(ordem['VALOR'].values)
 
     #Percorrer Cada Linha gerando as restrições e adicionando elas em um 
     restricoes = []
-    for i,row in historico_nexxus.iterrows():
-        #Recuperar Ativos que são necessários para a restrição
-        ativos = ParsingMemoriaCalculo.tabela_texto_memoria_para_df(row['MemoriaCalculo'])['NOME'] #Teremos que tratar para termos o nome igual da ordem
-        
-        #Extraindo Indices dos ativos para serem passados para o gerador de restrição
-        indices_ativos = indices_ativos(ordem,row['fundo'],ativos)
-        
-        #Gera Restrição
-        restricao = gerar_restricao(row['descricao'],indices_ativos,row['saldo_base'],row['exposicao'],row['l_max'],row['l_min'])
-        restricao = restricao[:13]+"_" + i +restricao[13:] #Adicionando um numerador na restrição
-        
-        # Dicionário para capturar a função definida dinamicamente
-        local_scope = {}
-        exec(restricao_codigo, globals(), local_scope)
-        
-        # Recuperar a função criada
-        nome_funcao = f"restricao_{i}"
-        restricao_func = local_scope[nome_funcao]
+    
+    #Adicionando restrições para valores negativos se manterem negativos e valores positivos se manterem positivos
+    for idx, valor in enumerate(ordem['VALOR'].values):  
+        if valor < 0:
+            restricoes.append({'type': 'ineq', 'fun': lambda x, idx=idx: -x[idx]})  
+        else:
+            restricoes.append({'type': 'ineq', 'fun': lambda x, idx=idx: x[idx]})  
 
-        restricoes.append({'type':'ineq','fun':restricao_func})    
+    #Adicionando Restrição para que soma do alocado em um ativo se mantenha sempre igual
+    for nome_ativo in ordem['ATIVO'].unique():
+        # Obtém os índices dos ativos correspondentes
+        ativos_ = ordem[ordem['ATIVO'] == nome_ativo].index.tolist()
+        
+        # Calcula a soma inicial para esses ativos
+        soma_teste = sum(ordem['VALOR'].iloc[i] for i in ativos_)
+
+        # Define a função de restrição
+        def teste_(x, ativos_=ativos_, soma_teste=soma_teste):
+            return sum(x[i] for i in ativos_) - soma_teste
+
+        # Adiciona a restrição à lista
+        restricoes.append({'type': 'eq', 'fun': teste_})
+   
+    #Ler Histórico Nexxus pra DataHoraVersão Mais recente
+    sql = """
+        WITH UltimoHistorico AS (
+            SELECT '{DataHoraVersao}' AS UltimaData
+            FROM desafio_kinea.boletagem_cp.nxenq_resultadoenquadramentohist
+            WHERE status = 1
+        )
+
+        SELECT 
+            nxe.IdFundo as IdFundo,
+            nxe.IdRegra AS IdRegra_resultado_enquadramento,  
+            nxe.DataHoraVersao as DataHoraVersao,
+            nxe.SaldoBaseCalculo as SaldoBaseCalculo,
+            nxe.ValorExposicao as ValorExposicao,
+            nxe.SaldoObjeto as SaldoObjeto,
+            nxe.LimiteMin as LimiteMin,
+            nxe.LimiteMax as LimiteMax,
+            nxr.ValorMin as ValorMin_nexusregras,
+            nxr.ValorMax as ValorMax_nexusregras,
+            nxr.Descricao as Descricao_nexusregras,
+            nxr.DescricaoDetalhada as DescricaoDetalhada_nexusregras,
+            nxrc.LimiteMin as LimiteMin_concentracao,
+            nxrc.LimiteMax as LimiteMax_concentracao,
+            nxrc.Descricao as Descricao_concentracao,
+            nxrc.DescricaoDetalhada as DescricaoDetalhada_concentracao,
+            nxmc.MemoriaCalculo as MemoriaCalculo
+        FROM desafio_kinea.boletagem_cp.nxenq_resultadoenquadramentohist nxe 
+        INNER JOIN UltimoHistorico uh 
+            ON nxe.DataHoraVersao = uh.UltimaData -- join para filtrar apenas para o último timestamp de simulação (nxe.DataHoraVersao)
+        LEFT JOIN desafio_kinea.boletagem_cp.nxenq_regras nxr 
+            ON nxr.IdRegra = CAST(regexp_replace(nxe.IdRegra, '[^0-9]', '') AS INT) -- join para a tabela de regras do tipo L%
+            AND nxe.IdRegra LIKE 'L%'  
+        LEFT JOIN desafio_kinea.boletagem_cp.nxenq_regrasporconcentracao nxrc
+            ON nxrc.IdRegra = CAST(regexp_replace(nxe.IdRegra, '[^0-9]', '') AS INT)
+            AND (nxe.IdRegra LIKE 'CM%' OR nxe.IdRegra LIKE 'CD%') -- join para a tabela de regras de concentração (CM%/CD%)
+        LEFT JOIN desafio_kinea.boletagem_cp.nxenq_memoriacalculo nxmc --join com tabela de memoria de cálculo
+            ON nxmc.DataHoraVersao = uh.UltimaData --join pela DataHoraVersao(última simulação), pelo Id do fundo e Id da regra
+            AND nxe.IdRegra = nxmc.IdRegra
+            AND nxe.IdFundo = nxmc.IdFundo
+        where nxe.status = 1  and nxe.IdFundo = 'CP4' -- Essa Adição do Fundo é apenas para o teste de Máximo;
+        """
+    #DataHoraVersaoEscolhida = '2025-02-12T14:46:18.000+00:00' - Exemplo Teste Mínimo
+    DataHoraVersaoEscolhida = '2025-02-10T11:12:37.000+00:00'
+    historico_nexxus = spark.sql(sql.format(DataHoraVersao = DataHoraVersaoEscolhida)).toPandas()
+
+    #Aqui começamos o looping para pegar as retrições de cada linha do historico
+    row = historico_nexxus.loc[0] #Apenas para Testes enquanto o Ali não envia
+    if 'L' in row['IdRegra_resultado_enquadramento']:
+        memoriacalculo = ParsingMemoriaCalculo.tabela_texto_memoria_para_df(row['MemoriaCalculo'])    
+        ativos = memoriacalculo['NOME'].unique() 
+        index_ativos = indices_ativos(ordem,row['IdFundo'],ativos)
+        
+    restricao = gerar_restricao(row['DescricaoDetalhada_nexusregras'],index_ativos,row['SaldoBaseCalculo'],row['ValorExposicao'],row['LimiteMax'],row['LimiteMin'])
+    restricao = restricao[:13]+"_0"+restricao[13:] #Adicionando um numerador na restrição
+
+    #Executando Função Criada
+    local_scope = {}
+    exec(restricao, globals(), local_scope)
+    # Recuperar a função criada
+    nome_funcao = f"restricao_0"
+    restricao_func = local_scope[nome_funcao]
+    
+    #Calculo do Saldo Restante
+    #SaldoOutrosAtivos = calcula_saldo_outros_ativos(row['IdFundo'],memoriacalculo,ordem)  - Real
+    #SaldoOutrosAtivos = 4488409934.9951079157038857079701 #Saldo necessário pra teste - Exemplo Teste Mínimo
+    SaldoOutrosAtivos = 711723122.4708
+    restricoes.append({'type':'ineq','fun':restricao_func,'args':(SaldoOutrosAtivos,)})    
+
+    '''
+        Versão Oficial
+        for i,row in historico_nexxus.iterrows():
+            #Recuperar Ativos que são necessários para a restrição
+            ativos = ParsingMemoriaCalculo.tabela_texto_memoria_para_df(row['MemoriaCalculo'])['NOME'] #Teremos que tratar para termos o nome igual da ordem
+            
+            #Extraindo Indices dos ativos para serem passados para o gerador de restrição
+            index_ativos = indices_ativos(ordem,row['fundo'],ativos)
+            
+            #Gera Restrição
+            restricao = gerar_restricao(row['descricao'],index_ativos,row['saldo_base'],row['exposicao'],row['l_max'],row['l_min'])
+            restricao = restricao[:13]+"_" + i +restricao[13:] #Adicionando um numerador na restrição
+            
+            # Dicionário para capturar a função definida dinamicamente
+            local_scope = {}
+            exec(restricao, globals(), local_scope)
+            
+            # Recuperar a função criada
+            nome_funcao = f"restricao_{i}"
+            restricao_func = local_scope[nome_funcao]
+
+            restricoes.append({'type':'ineq','fun':restricao_func})    
+    '''
+    
+    #Aqui termina o looping
+
 
     #Definindo função objetivo
     def objetivo(x,ordem_ideal):
-        y = np.abs(x -regua_ideal['percentual_alocacao']).sum()
-        return y
-
+        return (np.power(ordem_ideal - x,2).sum())/len(x)
+    
     #Realizar minimização
     minimizador = scipy.optimize.minimize(
         fun=objetivo,
-        x0=ordem,
-        args=(regua_ideal),
+        x0=ordem_0,
+        args=(ordem['VALOR'].values),
         constraints=restricoes,
-        bounds= bounds,
-        method='SLSQP',
+        method='trust-constr',
         options={'maxiter': 100000,'disp':False}
     )
 
-    ordem_otimizada = minimizador.x
-
+   
+    ordem['FINAL'] = minimizador.x
+    ordem['QTDE_FINAL'] = round(ordem['FINAL']/ordem['PU'])
+    
+    '''
+    Logs Teste Mínimo
+    print(f"Exposição pós Ajuste Discretizado {((ordem['QTDE_FINAL']*ordem['PU'])[3:].sum()+SaldoOutrosAtivos)/row['SaldoBaseCalculo']}")
+    '''
+    print(f"Exposição pós Ajuste Discretizado {((ordem['QTDE_FINAL']*ordem['PU'])[:2].sum()+SaldoOutrosAtivos)/row['SaldoBaseCalculo']}")
+    
+    #order_otimizada.to_csv("/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/input_nexxus.csv") salvar o final no input para re-entrada no nexxus
+    
+    return ordem
 
 if __name__ == "__main__":
-    ExecutarOtimização()
+    teste = otimiza_ordem()
+    teste.display()

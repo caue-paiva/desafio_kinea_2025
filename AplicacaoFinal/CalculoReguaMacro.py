@@ -133,7 +133,7 @@ class ReguaMacro:
         
         restricoes_book_micro = restricoes_book_micro[restricoes_book_micro['book_micro'] == book_ativo]
         restricoes_book_micro = restricoes_book_micro.merge(regua_macro,on='fundo')
-        fundo_restrito = restricoes_fundo_restrito[restricoes_fundo_restrito['ativo'] == ativo]['fundo_restrito'].values[0] Ativos não cadastrados estão dando problema
+        fundo_restrito = restricoes_fundo_restrito[restricoes_fundo_restrito['ativo'] == ativo]['fundo_restrito'].values[0] #Ativos não cadastrados estão dando problema
         #fundo_restrito = None Pra caso o ativo não esteja cadastrado
         restricoes = regua_macro[regua_macro['fundo'] == fundo_restrito]
         restricoes = pd.concat([restricoes,restricoes_book_micro[restricoes_book_micro['flag'] == False]], axis=0).drop(columns=['book','book_micro','flag'])
