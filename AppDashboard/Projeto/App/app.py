@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import io
+import io,time
 from streamlit_autorefresh import st_autorefresh
 from database_connection import connect_database
 from pathlib import Path
@@ -11,6 +11,7 @@ import pandas as pd
 
 HOST_NAME = os.getenv("HOST_NAME")
 ACESS_TOKEN = os.getenv("ACESS_TOKEN")
+BOOKS_JOB_ID = os.getenv("BOOKS_JOB_ID")
 
 def upload_arquivo(df:pd.DataFrame,path:str,overwrite:bool = True)->bool:
 
@@ -40,6 +41,86 @@ def upload_ordem(ordem:pd.DataFrame)->bool:
    path = f"/Volumes/desafio_kinea/boletagem_cp/files/Ordem/ordem_{str_tempo}.csv"
    return upload_arquivo(ordem,path,True)
 
+def atualiza_tabela_books()->bool:
+    url = f"https://{HOST_NAME}/api/2.2/jobs/run-now"
+    
+    headers = {
+      "Authorization": f"Bearer {ACESS_TOKEN}",
+      "Content-Type": "application/json"
+    }
+
+    params = {
+        "job_id": BOOKS_JOB_ID 
+    }
+
+    response = requests.post(url=url,headers=headers,params=params)
+    if response.status_code == 200:
+       return True
+    else:
+       return False
+
+def job_atualizacao_rodando()->bool | None:
+    url = f"https://{HOST_NAME}/api/2.2/jobs/runs/list"
+    
+    headers = {
+      "Authorization": f"Bearer {ACESS_TOKEN}",
+      "Content-Type": "application/json"
+    }
+
+    params = {
+        "job_id": BOOKS_JOB_ID,
+        "active_only": "true" 
+    }
+
+    response = requests.get(url=url,headers=headers,params=params)
+    if response.status_code == 200:
+        response = response.json()
+
+        if "runs" not in response: #não tem nenhuma run no momento
+            return False
+        else:
+            return True
+    else:
+       return None
+
+def popup_esperar_job(acabou_espera= False)->None:
+    texto1 = "Tabelas AtualizadaS, prossiga para janela de EtapasBoletagem" if acabou_espera else "Esperando Atualização das tabelas com novo ativo"
+    texto2 = "" if acabou_espera else "Antes de usar o resto da aplicação, por favor espere as tabelas atualizarem."
+
+    st.markdown(
+f"""
+        <style>
+        /* Fullscreen transparent overlay */
+        .overlay {{
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }}
+        /* White box in the middle */
+        .popup {{
+            background: #fff;
+            padding: 20px 30px;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        </style>
+        <div class="overlay">
+          <div class="popup">
+            <h3>{texto1}</h3>
+            <p>{texto2}</p>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    ) 
+
 # Configurar a página
 st.set_page_config(page_title="Input de ordem - Crédito Privado", layout="wide")
 
@@ -52,6 +133,8 @@ if "show_extra" not in st.session_state:
     st.session_state.show_extra = False #mostra tela das Etapas Boletagem
 if "refresh_page" not in st.session_state:
     st.session_state.refresh_page = False #da um refresh único na tela
+if "cadastrou_ativo" not in st.session_state:
+    st.session_state.cadastrou_ativo = False #diz se usuário cadastrou um novo ativo
 
 
 
@@ -157,14 +240,34 @@ if not st.session_state.show_popup:
             if st.button("Encaminhar Ordem"):
                 verifica_ativos(df_filtered)
                 resultado_upload:bool = upload_ordem(df_filtered) #faz upload do DF no volume
-
                 if resultado_upload: #upload teve sucesso
                     st.session_state.show_extra = not st.session_state.show_extra #libera para ver tela do EtapasBoletagem
                     st.session_state.refresh_page = True
                     st.success("Ordem encaminhada, tela de Etapas Boletagem Disponível")
-                    #print(st.session_state.database.select_to_dataframe(
-                    #"""select * from desafio_kinea.boletagem_cp.book_ativos"""
-                    #))
+                    
+                    if st.session_state.cadastrou_ativo: #cadastrou novo ativo, precisamos atualizar tabela de books
+                        resultado_atualizacao:bool = atualiza_tabela_books()
+
+                        if resultado_atualizacao:
+                            job_rodando = True
+
+                            while job_rodando: #loop até o job de atualização acabar
+                                popup_esperar_job() #popup para o usuário saber que está esperando
+                                job_rodando = job_atualizacao_rodando()
+                                if job_rodando is None:
+                                    print("Falha ao checar status do job de atualização de books")
+                                    break
+                                time.sleep(3) #para não fazer muitas chamadas de API
+                            time.sleep(1)
+                            popup_esperar_job(acabou_espera=True) #popup para mostrar pro user que ele pode seguir para as etapas
+                            time.sleep(4)
+                            st.rerun()
+                            time.sleep(1)
+
+                               
+                        else:
+                            print("Falha ao iniciar Job do databricks para atualizar arquivos de books dos ativos")
+
                 else:
                     print("Falha ao dar upload do arquivo no volume do databricks")
    
@@ -201,6 +304,7 @@ if st.session_state.show_popup:
         with col_btn_popup[0]:
             if st.button("Confirmar"):
                 st.session_state.show_popup = False
+                st.session_state.cadastrou_ativo = True #usuário cadastrou um ativo
                 edited_popup_df = edited_popup_df.rename(columns={"Ativo": "ativo", "Book": "book", "Fundos Restritos": "fundo_restrito"})
                 st.session_state.df_popup = edited_popup_df
 
