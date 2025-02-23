@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-def get_ordem_original()->pd.DataFrame | None:
+def __get_ordem_original()->pd.DataFrame | None:
    path = Path("/Volumes/desafio_kinea/boletagem_cp/files/Ordem/")
    for file in path.glob("*.csv"):
       if "ordem_" in str(file): #arquivos de ordem são no formato: ordem_{data}
@@ -11,7 +11,7 @@ def get_ordem_original()->pd.DataFrame | None:
    
    return None
 
-def get_input_nexxus_final()->pd.DataFrame | None:
+def __get_input_nexxus_final()->pd.DataFrame | None:
    path = Path("/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/")
    for file in path.glob("*.csv"):
       if "input_nexxus_2.csv" in str(file): #arquivos de ordem são no formato: ordem_{data}
@@ -19,14 +19,14 @@ def get_input_nexxus_final()->pd.DataFrame | None:
    
    return None
 
-def get_relacao_books()->pd.DataFrame:
+def __get_relacao_books()->pd.DataFrame:
    path = Path("/Volumes/desafio_kinea/boletagem_cp/files/DadosIniciais/verificacao_range_e_book.csv")
    df = pd.read_csv(path,usecols=["ativo","book_micro"]) #remove duplicadas pq o CSV tem ativos repetidos (por que ele mapea um ativo em um fundo)
    df = df.drop_duplicates()
 
    return df
 
-def join_pelo_book(df_final:pd.DataFrame, relacao_books:pd.DataFrame)->pd.DataFrame:
+def __join_pelo_book(df_final:pd.DataFrame, relacao_books:pd.DataFrame)->pd.DataFrame:
    """
    Join do df final (só faltando a coluna de book) com o df de relação ativo -> book (micro e macro) para achar o book de cada ativo.
    """
@@ -45,7 +45,7 @@ def join_pelo_book(df_final:pd.DataFrame, relacao_books:pd.DataFrame)->pd.DataFr
 
    return df_join
 
-def adiciona_colunas(enquadrado_nexxus_df:pd.DataFrame)->pd.DataFrame:
+def __adiciona_colunas(enquadrado_nexxus_df:pd.DataFrame)->pd.DataFrame:
       data = datetime.today().date()
       enquadrado_nexxus_df["Data"] = data
       enquadrado_nexxus_df["Data Liq."] = data
@@ -58,23 +58,23 @@ def adiciona_colunas(enquadrado_nexxus_df:pd.DataFrame)->pd.DataFrame:
       return enquadrado_nexxus_df
 
 def ParseOrdemFinal()->None:
-   ordem_df = get_ordem_original()
-   enquadrado_nexxus_df = get_input_nexxus_final()
-   relacao_books = get_relacao_books()
+   ordem_df = __get_ordem_original()
+   enquadrado_nexxus_df = __get_input_nexxus_final()
+   relacao_books = __get_relacao_books()
 
    enquadrado_nexxus_df = enquadrado_nexxus_df.merge( #Join pelo ativo e o preço ser igual
       ordem_df,left_on=["ATIVO","PU"],right_on=["Ticker","Price"], how="inner"
    )
 
    enquadrado_nexxus_df =  enquadrado_nexxus_df.drop(["ATIVO","QTDE","PU"],axis=1)
-   enquadrado_nexxus_df = adiciona_colunas(enquadrado_nexxus_df)
+   enquadrado_nexxus_df = __adiciona_colunas(enquadrado_nexxus_df)
    enquadrado_nexxus_df = enquadrado_nexxus_df.rename(
       {
          "FUNDO": "Allocation",
       }, axis = 1
    )
    
-   enquadrado_nexxus_df = join_pelo_book(enquadrado_nexxus_df,relacao_books)
+   enquadrado_nexxus_df = __join_pelo_book(enquadrado_nexxus_df,relacao_books)
 
    path_final = Path("/Volumes/desafio_kinea/boletagem_cp/files/ResultadoFinal/resultado_final.csv") #salva no diretório do resultado final
    enquadrado_nexxus_df.to_csv(path_final,index=False)
