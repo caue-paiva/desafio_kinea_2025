@@ -168,6 +168,20 @@ class DadosAlocacao:
         "credito_aportado": timedelta(days=1),
         "classe_produto": timedelta(weeks=1),
     }
+
+    TABELAS_EXTRAIDAS = [
+        "tabelascar_pl_emissores",
+        "tabelascar_L_anos",
+        "tabelascar_info_fundos",
+        "tabelascar_info_ativos",
+        "PL_total_fundo",
+        "PL_credito_privado_por_fundo",
+        "mapa_tabelacar",
+        "verificacao_range_e_book",
+        "credito_aportado",
+        "classe_produto"
+    ]
+
     __MAPA_TABELAS_METODOS:dict = {
         "tabelascar_pl_emissores": __QUERIES.tabelascar_pl_emissor,
         "tabelascar_L_anos":  __QUERIES.tabelascar_pl_anos_ativos,
@@ -185,12 +199,12 @@ class DadosAlocacao:
     datas_atualizacao:dict[str, datetime | None] #dado o nome de uma query/tabela diz qual foi a última vez que ela foi atualizada
     path_folder_dados:Path
 
-    def __init__(self, forca_atualizacao = False):
+    def __init__(self, forca_atualizacao = False, atualiza_dados_especificos: list | None = None):
         #dir_atual = Path(os.getcwd())
         path_final = Path("/Volumes/desafio_kinea/boletagem_cp/files/DadosIniciais")
         self.path_folder_dados = path_final
         self.__ler_arquivo_datas()
-        self.__verifica_dados_atualizados(forca_atualizacao)
+        self.__verifica_dados_atualizados(forca_atualizacao,atualiza_dados_especificos)
        
     def __ler_arquivo_datas(self)->None:
         if not Path(self.__ARQUIVOS_DATAS).exists():
@@ -229,11 +243,13 @@ class DadosAlocacao:
             datas_df = pd.concat([datas_df, new_row], ignore_index=True)
         datas_df.to_csv(path,index=False)
 
-    def __verifica_dados_atualizados(self,forca_atualizacao = False)->None:
+    def __verifica_dados_atualizados(self,forca_atualizacao = False, atualiza_dados_especificos: list | None = None)->None:
         atualizou_tabela = False
         for tabela,data_atualizacao in self.datas_atualizacao.items():
             tempo_max_atualizar = self.__DATAS_PARA_ATUALIZAR[tabela]
-            if data_atualizacao is None or forca_atualizacao: #atualiza dados
+
+            atualizacao_especifica = (atualiza_dados_especificos is not None) and (tabela in atualiza_dados_especificos) #verifica se precisamos atualizar essa tabela em específico
+            if data_atualizacao is None or forca_atualizacao or atualizacao_especifica: #atualiza dados
                 print("atualizando tabela: ", tabela)
                 atualizou_tabela = True
                 self.__atualizar_dados(tabela) 
@@ -422,17 +438,19 @@ class DadosAlocacao:
 
 
 if __name__ == "__main__":
-    argumento_linha:str = sys.argv[1] if len(sys.argv) > 1 else "False"
-    if argumento_linha.lower().strip() == "true":
+    argumento_linha_1:str = sys.argv[1] if len(sys.argv) > 1 else "False" #primeiro argumento da linha de comando: força atualização de tudo?
+    argumento_linha_2: str | None =  sys.argv[2] if len(sys.argv) > 2 else None  #primeiro argumento da linha de comando: força atualização de uma tabela em específico?
+    
+    if argumento_linha_1.lower().strip() == "true": #verifica arg 1
         forca_atualizacao = True
         print("Força atualização")
     else:
         forca_atualizacao = False
         print("Não força atualização")
 
-    dados = DadosAlocacao(False)
+    atualiza_tabelas_especificas = None #verifica arg2
+    if argumento_linha_2 is not None and argumento_linha_2 in DadosAlocacao.TABELAS_EXTRAIDAS:
+        atualiza_tabelas_especificas = [argumento_linha_2]
 
-    df = dados.get_classe_produto()
-
-    display(df)
+    dados = DadosAlocacao(forca_atualizacao,atualiza_tabelas_especificas) #instancia classe de dados com os argumentos de forçar ou não atualização
  
