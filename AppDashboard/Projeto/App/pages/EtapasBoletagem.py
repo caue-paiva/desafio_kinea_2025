@@ -55,27 +55,6 @@ class TelaFases:
             print(f"Falha ao lista arquivos do diretório {nome_dir}")
             return None
    
-   def __baixa_input_nexxus(self)->pd.DataFrame | None:
-        """
-        Baixa o arquivo de input para o nexxus que está no diretório InputNexxus/ do volume 
-        """
-        path_arquivo:str = "/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/input_nexxus.csv"
-        url = f"https://{self.HOST_NAME}/api/2.0/fs/files{path_arquivo}"
-
-        headers = {
-            "Authorization": f"Bearer {self.ACESS_TOKEN}",
-            "Content-Type": "application/octet-stream"
-        }
-
-        response = requests.get(url=url,headers=headers)
-
-        if response.status_code == 200:
-            df = pd.read_csv(io.BytesIO(response.content))
-            return df
-        else:
-            print(f"Falha ao baixar arquivo do path {path_arquivo}")
-            return None
-   
    def __baixa_resultado_arquivo(self,path_volume:str)->pd.DataFrame | None:
         """
         Baixa o arquivo do resultado final
@@ -216,7 +195,7 @@ class TelaFases:
                 st.success("Status: Régua Pronta")
                 st.info("CSV disponível para download.")
                     
-                df:pd.DataFrame | None  = self.__baixa_resultado_arquivo("InputNexxus/input_nexxus.csv") #df da régua no formato do nexxus
+                df:pd.DataFrame | None  = self.__baixa_resultado_arquivo("InputNexxus/input_nexxus_ali.csv") #df da régua no formato do nexxus
                 if df is not None: #df valido
                     csv_data = df.to_csv(index=False).encode('utf-8')
                 
