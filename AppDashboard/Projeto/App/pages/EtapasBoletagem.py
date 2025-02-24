@@ -163,20 +163,21 @@ class TelaFases:
             st.session_state.mock_final_status = False
 
         # Barra lateral para manipular o estado simulado da régua e do nexxus
-        st.sidebar.title("Testar Cenários de Back-end")
+        
+        # st.sidebar.title("Testar Cenários de Back-end")
 
-        st.sidebar.subheader("Régua")
-        if st.sidebar.button("Régua -> PRONTA"):
-            st.session_state.mock_regua = True
-        if st.sidebar.button("Régua -> PROCESSANDO"):
-            st.session_state.mock_regua = False
+        # st.sidebar.subheader("Régua")
+        # if st.sidebar.button("Régua -> PRONTA"):
+        #     st.session_state.mock_regua = True
+        # if st.sidebar.button("Régua -> PROCESSANDO"):
+        #     st.session_state.mock_regua = False
 
-        st.sidebar.subheader("Resultado Final")
-        if st.sidebar.button("Resultado Final -> Pronto"):
-            st.session_state.mock_final_status = True
-        if st.sidebar.button("Resultado Final -> Esperando"):
-            st.session_state.mock_final_status = False
-       
+        # st.sidebar.subheader("Resultado Final")
+        # if st.sidebar.button("Resultado Final -> Pronto"):
+        #     st.session_state.mock_final_status = True
+        # if st.sidebar.button("Resultado Final -> Esperando"):
+        #     st.session_state.mock_final_status = False
+        
         # Refresh automático (a cada 5s)
         st_autorefresh(interval=5000, limit=None, key="autorefresh")
 
