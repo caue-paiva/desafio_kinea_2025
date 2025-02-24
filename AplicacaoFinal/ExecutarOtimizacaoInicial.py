@@ -106,6 +106,7 @@ def ExecutarOtimizacaoInicial():
         livres = verificador.verifica_alocacao(alocacao,ativo,valor_trade)
         resultado_otimizado = otimiza_regua(alocacao,livres)
         df_otimizado =resultado_otimizado[0] 
+        df_
         df_otimizado.to_csv(f"/Volumes/desafio_kinea/boletagem_cp/files/ReguasOtimizadas/REGUA_OTIMIZADA_{ativo}.csv",index=False)
         df_otimizado['limites'] = livres[['livre_max_pl','livre_emissor','livre_anos']].min(axis=1)
         display(df_otimizado)

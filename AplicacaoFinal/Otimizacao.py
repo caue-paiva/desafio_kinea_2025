@@ -22,7 +22,10 @@ def otimiza_regua(regua_ideal:pd.DataFrame, livres:pd.DataFrame)->tuple[pd.DataF
     #Adicionando Bounds
     bounds = []
     for limite in limites_maximos:
-        bounds.append((0,limite))
+        if limite < 0:
+           continue
+        else:
+            bounds.append((0,limite))
 
     #Função Objetivo -> Soma dos Módulos das diferenças entre a Régua Ideal e a Régua Possível
     def objetivo(x, regua_ideal):
@@ -38,18 +41,22 @@ def otimiza_regua(regua_ideal:pd.DataFrame, livres:pd.DataFrame)->tuple[pd.DataF
     constraints.append({'type': 'eq', 'fun': lambda x: soma_1(x)})
 
     #Resolver o problema de minimização
-    minimizador = scipy.optimize.minimize(
-        fun=objetivo,
-        x0=x0,
-        args=(regua_ideal),
-        constraints=constraints,
-        bounds= bounds,
-        method='SLSQP',
-        options={'maxiter': 100000,'disp':False}
-    )    
-
-    erro = minimizador.fun
-    regua_otimizada = minimizador.x
+    if len(bounds)>0: #Em Caso de Haver Limites
+        minimizador = scipy.optimize.minimize(
+            fun=objetivo,
+            x0=x0,
+            args=(regua_ideal),
+            constraints=constraints,
+            bounds= bounds,
+            method='SLSQP',
+            options={'maxiter': 100000,'disp':False}
+        )    
+        erro = minimizador.fun
+        regua_otimizada = minimizador.x
+    else:
+        erro = 0
+        regua_otimizada = regua_ideal['percentual_alocacao']
+    
 
     #Salvar Regua Otimizada e Erro
     regua_ideal["alocacao_otimizada"] = regua_otimizada
@@ -74,7 +81,7 @@ def otimiza_ativo(verificador:VerificadorTabelacar, ativo:str)->tuple[pd.DataFra
 
 
 if __name__ == "__main__":
-    ativo = 'CPGT18'
+    ativo = 'CESE22'
     verificador = VerificadorTabelacar()
     df_otimizado,erro = otimiza_ativo(verificador,ativo)
     print(erro)

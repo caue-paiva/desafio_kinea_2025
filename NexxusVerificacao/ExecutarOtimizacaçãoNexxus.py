@@ -46,16 +46,15 @@ def gerar_restricao(descricao,ativos,saldo_base,exposicao,l_max,l_min):
             def restricao(x,SaldoOutrosAtivos):
                 ativos_considerados = [x[0],x[1],x[4],x[5],x[6]...]
                 return sum(ativos_considerados) + SaldoOutrosAtivos - (0.8 * 500000) 
-    '''
-    '''
-            Exemplo 3:
+         
+         Exemplo 3:
             Descrição: Vedação
             Posição Ativos: [0,1,4,5,6]
             Saldo Base: 500000
             Limite Mínimo: null
             Limite Máximo: null
             Porcentagem: null
-            def restricao(x):
+            def restricao(x,SaldoOutrosAtivos):
                 ativos_considerados = [x[0],x[1],x[4],x[5],x[6]...]
                 return -sum(ativos_considerados)
     '''
@@ -81,7 +80,10 @@ def indices_ativos (ordem,fundo,ativos):
     '''
     Função para retornar index dos ativos para que possamos utilizar isso na otimização
     '''
-    indices = ordem[(ordem['FUNDO'] == fundo)  & (ordem['ATIVO'].isin(ativos))].index
+    ativos_nomes = []
+    for ativo in ativos:
+        ativos_nomes.append(ativo.split(" ")[1])
+    indices = ordem[(ordem['FUNDO'] == fundo)  & (ordem['ATIVO'].isin(ativos_nomes))].index
     return indices
 
 def calcula_saldo_outros_ativos(fundo,memoriacalculo,ordem):
@@ -92,11 +94,11 @@ def calcula_saldo_outros_ativos(fundo,memoriacalculo,ordem):
     return df['POSIÇÃO_REAL'].sum()
 
 def otimiza_ordem():
-    #Ler ordem que foi usada de input pro nexxus
-    ordem = pd.read_csv("/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/input_nexxus_teste_joao - Copia.csv",sep=';')
+    ordem = spark.read.options(header='True', inferSchema='True').csv('/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/input_nexxus.csv').toPandas()   
+    order = ordem.drop(columns='_c0')
     ordem['VALOR'] = ordem['PU'] * ordem['QTDE']
     #Gerando Vetor Inicial com Distribuição Uniforme Entre os Fundos, necessário igual a somar final
-    ordem_0 = np.zeros_like(ordem['VALOR'].values)
+    ordem_0 = np.random.uniform(min(ordem['VALOR'].values),max(ordem['VALOR'].values),len(ordem))
 
     #Percorrer Cada Linha gerando as restrições e adicionando elas em um 
     restricoes = []
@@ -114,24 +116,24 @@ def otimiza_ordem():
         ativos_ = ordem[ordem['ATIVO'] == nome_ativo].index.tolist()
         
         # Calcula a soma inicial para esses ativos
-        soma_teste = sum(ordem['VALOR'].iloc[i] for i in ativos_)
+        soma_ativo = sum(ordem['VALOR'].iloc[i] for i in ativos_)
 
         # Define a função de restrição
-        def teste_(x, ativos_=ativos_, soma_teste=soma_teste):
-            return sum(x[i] for i in ativos_) - soma_teste
+        def ativo_(x, ativos_=ativos_, soma_ativo=soma_ativo):
+            return sum(x[i] for i in ativos_) - soma_ativo
 
         # Adiciona a restrição à lista
-        restricoes.append({'type': 'eq', 'fun': teste_})
+        restricoes.append({'type': 'eq', 'fun': ativo_})
    
     #Ler Histórico Nexxus pra DataHoraVersão Mais recente
     sql = """
-        WITH UltimoHistorico AS (
+       WITH UltimoHistorico AS (
             SELECT '{DataHoraVersao}' AS UltimaData
             FROM desafio_kinea.boletagem_cp.nxenq_resultadoenquadramentohist
             WHERE status = 1
         )
 
-        SELECT 
+        SELECT DISTINCT
             nxe.IdFundo as IdFundo,
             nxe.IdRegra AS IdRegra_resultado_enquadramento,  
             nxe.DataHoraVersao as DataHoraVersao,
@@ -151,76 +153,60 @@ def otimiza_ordem():
             nxmc.MemoriaCalculo as MemoriaCalculo
         FROM desafio_kinea.boletagem_cp.nxenq_resultadoenquadramentohist nxe 
         INNER JOIN UltimoHistorico uh 
-            ON nxe.DataHoraVersao = uh.UltimaData -- join para filtrar apenas para o último timestamp de simulação (nxe.DataHoraVersao)
+            ON nxe.DataHoraVersao = uh.UltimaData -- join para filtrar apenas para o último timestamp de simulação (nxe.DataHoraVersao)
         LEFT JOIN desafio_kinea.boletagem_cp.nxenq_regras nxr 
             ON nxr.IdRegra = CAST(regexp_replace(nxe.IdRegra, '[^0-9]', '') AS INT) -- join para a tabela de regras do tipo L%
             AND nxe.IdRegra LIKE 'L%'  
         LEFT JOIN desafio_kinea.boletagem_cp.nxenq_regrasporconcentracao nxrc
             ON nxrc.IdRegra = CAST(regexp_replace(nxe.IdRegra, '[^0-9]', '') AS INT)
-            AND (nxe.IdRegra LIKE 'CM%' OR nxe.IdRegra LIKE 'CD%') -- join para a tabela de regras de concentração (CM%/CD%)
-        LEFT JOIN desafio_kinea.boletagem_cp.nxenq_memoriacalculo nxmc --join com tabela de memoria de cálculo
-            ON nxmc.DataHoraVersao = uh.UltimaData --join pela DataHoraVersao(última simulação), pelo Id do fundo e Id da regra
+            AND (nxe.IdRegra LIKE 'CM%' OR nxe.IdRegra LIKE 'CD%') -- join para a tabela de regras de concentração (CM%/CD%)
+        LEFT JOIN desafio_kinea.boletagem_cp.nxenq_memoriacalculo nxmc --join com tabela de memoria de cálculo
+            ON nxmc.DataHoraVersao = uh.UltimaData --join pela DataHoraVersao(última simulação), pelo Id do fundo e Id da regra
             AND nxe.IdRegra = nxmc.IdRegra
             AND nxe.IdFundo = nxmc.IdFundo
-        where nxe.status = 1  and nxe.IdFundo = 'CP4' -- Essa Adição do Fundo é apenas para o teste de Máximo;
+        where nxe.status = 1  
+        and nxe.IdFundo = 'CPI'
+        and nxe.IdRegra = 'L677'
+        --and nxe.IdFundo = 'CP4' -- Adição de Cláusula para Teste
+        --and (nxe.IdRegra = 'L1206' or nxe.IdRegra = 'L636') -- Adição de Cláusula para Teste
         """
     #DataHoraVersaoEscolhida = '2025-02-12T14:46:18.000+00:00' - Exemplo Teste Mínimo
-    DataHoraVersaoEscolhida = '2025-02-10T11:12:37.000+00:00'
+    #DataHoraVersaoEscolhida = '2025-02-10T11:12:37.000+00:00' - Exemplo Teste Máximo
+    DataHoraVersaoEscolhida = '2025-02-07T11:22:56.000+00:00'
     historico_nexxus = spark.sql(sql.format(DataHoraVersao = DataHoraVersaoEscolhida)).toPandas()
 
     #Aqui começamos o looping para pegar as retrições de cada linha do historico
-    row = historico_nexxus.loc[0] #Apenas para Testes enquanto o Ali não envia
-    if 'L' in row['IdRegra_resultado_enquadramento']:
+    for idx, row in historico_nexxus.iterrows():
+        #row = historico_nexxus.loc[0] #Apenas para Testes enquanto o Ali não envia
         memoriacalculo = ParsingMemoriaCalculo.tabela_texto_memoria_para_df(row['MemoriaCalculo'])    
         ativos = memoriacalculo['NOME'].unique() 
         index_ativos = indices_ativos(ordem,row['IdFundo'],ativos)
         
-    restricao = gerar_restricao(row['DescricaoDetalhada_nexusregras'],index_ativos,row['SaldoBaseCalculo'],row['ValorExposicao'],row['LimiteMax'],row['LimiteMin'])
-    restricao = restricao[:13]+"_0"+restricao[13:] #Adicionando um numerador na restrição
+        descricao = row['DescricaoDetalhada_nexusregras']
+        if descricao is None or descricao == '':
+            descricao = row['DescricaoDetalhada_nexusregras']
 
-    #Executando Função Criada
-    local_scope = {}
-    exec(restricao, globals(), local_scope)
-    # Recuperar a função criada
-    nome_funcao = f"restricao_0"
-    restricao_func = local_scope[nome_funcao]
+        restricao = gerar_restricao(descricao,index_ativos,row['SaldoBaseCalculo'],row['ValorExposicao'],row['LimiteMax'],row['LimiteMin'])
+        restricao = restricao[:13]+f"_{idx}"+restricao[13:] #Adicionando um numerador na restrição
+
+        #Executando Função Criada
+        local_scope = {}
+        exec(restricao, globals(), local_scope)
+        # Recuperar a função criada
+        nome_funcao = f"restricao_{idx}"
+        restricao_func = local_scope[nome_funcao]
+        
+        #Calculo do Saldo Restante
+        #SaldoOutrosAtivos = calcula_saldo_outros_ativos(row['IdFundo'],memoriacalculo,ordem)  - Real
+        #SaldoOutrosAtivos = 4488409934.9951079157038857079701 #Saldo necessário pra teste - Exemplo Teste Limite Mínimo
+        #SaldoOutrosAtivos = 711723122.4708 #Exemplo Teste Limite Máximo
+        SaldoOutrosAtivos = 51659592.775116
+        restricoes.append({'type':'ineq','fun':restricao_func,'args':(SaldoOutrosAtivos,)})    
     
-    #Calculo do Saldo Restante
-    #SaldoOutrosAtivos = calcula_saldo_outros_ativos(row['IdFundo'],memoriacalculo,ordem)  - Real
-    #SaldoOutrosAtivos = 4488409934.9951079157038857079701 #Saldo necessário pra teste - Exemplo Teste Mínimo
-    SaldoOutrosAtivos = 711723122.4708
-    restricoes.append({'type':'ineq','fun':restricao_func,'args':(SaldoOutrosAtivos,)})    
-
-    '''
-        Versão Oficial
-        for i,row in historico_nexxus.iterrows():
-            #Recuperar Ativos que são necessários para a restrição
-            ativos = ParsingMemoriaCalculo.tabela_texto_memoria_para_df(row['MemoriaCalculo'])['NOME'] #Teremos que tratar para termos o nome igual da ordem
-            
-            #Extraindo Indices dos ativos para serem passados para o gerador de restrição
-            index_ativos = indices_ativos(ordem,row['fundo'],ativos)
-            
-            #Gera Restrição
-            restricao = gerar_restricao(row['descricao'],index_ativos,row['saldo_base'],row['exposicao'],row['l_max'],row['l_min'])
-            restricao = restricao[:13]+"_" + i +restricao[13:] #Adicionando um numerador na restrição
-            
-            # Dicionário para capturar a função definida dinamicamente
-            local_scope = {}
-            exec(restricao, globals(), local_scope)
-            
-            # Recuperar a função criada
-            nome_funcao = f"restricao_{i}"
-            restricao_func = local_scope[nome_funcao]
-
-            restricoes.append({'type':'ineq','fun':restricao_func})    
-    '''
-    
-    #Aqui termina o looping
-
 
     #Definindo função objetivo
     def objetivo(x,ordem_ideal):
-        return (np.power(ordem_ideal - x,2).sum())/len(x)
+        return (np.abs(ordem_ideal - x).sum())
     
     #Realizar minimização
     minimizador = scipy.optimize.minimize(
@@ -237,10 +223,13 @@ def otimiza_ordem():
     ordem['QTDE_FINAL'] = round(ordem['FINAL']/ordem['PU'])
     
     '''
-    Logs Teste Mínimo
+    Logs Teste Limite Mínimo
     print(f"Exposição pós Ajuste Discretizado {((ordem['QTDE_FINAL']*ordem['PU'])[3:].sum()+SaldoOutrosAtivos)/row['SaldoBaseCalculo']}")
-    '''
+    
+    Logs Teste Limite Máximo
     print(f"Exposição pós Ajuste Discretizado {((ordem['QTDE_FINAL']*ordem['PU'])[:2].sum()+SaldoOutrosAtivos)/row['SaldoBaseCalculo']}")
+    '''
+    print(minimizador)
     
     #order_otimizada.to_csv("/Volumes/desafio_kinea/boletagem_cp/files/InputNexxus/input_nexxus.csv") salvar o final no input para re-entrada no nexxus
     
@@ -248,4 +237,4 @@ def otimiza_ordem():
 
 if __name__ == "__main__":
     teste = otimiza_ordem()
-    teste.display()
+    display(teste)
