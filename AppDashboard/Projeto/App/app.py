@@ -17,7 +17,7 @@ SQL_HTTP_PATH = os.getenv("SQL_HTTP_PATH")
 def upload_arquivo(df:pd.DataFrame,path:str,overwrite:bool = True)->bool:
 
    csv_buffer = io.BytesIO()
-   df.to_csv(csv_buffer, index=False)  # Save CSV as bytes
+   df.to_csv(csv_buffer, index=False,sep='\t', encoding='utf-8')  # Save CSV as bytes
    csv_buffer.seek(0)  # Reset buffer position
 
    url = f"https://{HOST_NAME}/api/2.0/fs/files{path}"
